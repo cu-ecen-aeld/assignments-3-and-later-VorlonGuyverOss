@@ -72,10 +72,7 @@ writeFile()
     echo '' > rev_tmp
     echo '' > file_to_write_tmp
 
-#    echo "directory_tmp"
-#    cat directory_tmp
     tmp_dir=$(cat directory_tmp)
-#    echo ${tmp_dir}
 
 
     # Reverse the input directory with filename
@@ -86,11 +83,9 @@ writeFile()
     (cat rev_tmp | rev > file_to_write_tmp)
 
     # Cut the file to write out and then reverse back to a directory
-#    echo "FGREEN 2"
     (cat directory_tmp | rev > rev_tmp)
     (cat rev_tmp | sed 's/'"${tmp_rev_tmp}"'//g' | rev > directory_tmp)
     tmp_dir=$(cat directory_tmp)
-#    echo "tmp_dir = $tmp_dir"
 
     # Maker directory
     mkdir -p ${tmp_dir}
@@ -104,13 +99,12 @@ writeFile()
 
     # Touch file in said directory
     file_to_write=$(cat file_to_write_tmp)
-#    echo "file_to_write = $file_to_write"
     touch ${tmp_dir}${file_to_write}
     result=$?
     if [ $result -ne 0 ] ; then
     {
         echo "ERROR: Touching the file; exiting now"
-        retrun 1
+        return 1
     }
     fi
 
