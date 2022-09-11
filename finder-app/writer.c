@@ -43,12 +43,12 @@ int main (int argc, char * argv[])
         for (count = 0; count < NUMBER_OF_WRITER_ARGS; count++)
         {
             printf("DEBUG CODE - FGREEN: Student's error message: Invalid "
-                    "number of arguments.  Passed argv[count] %s\n",
-                    argv[count]);
+                    "number of arguments.  Passed argv[%d] (%s)\n",
+                    count, argv[count]);
 
             syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: Student's error "
                     "message: Invalid number of arguments.  "
-                    "Passed argv[count] %s\n", argv[count]);
+                    "Passed argv[%d], (%s)\n", count, argv[count]);
         }
 
 
