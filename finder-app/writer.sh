@@ -154,9 +154,9 @@ if [ $result -ne 0 ] ; then
 }
 else
 {
-#    writeFileWithShellScript
+    writeFileWithShellScript
 
-    writeFileWith_C_Program
+#    writeFileWith_C_Program
 
     result=$?
     if [ $result -ne 0 ] ; then
