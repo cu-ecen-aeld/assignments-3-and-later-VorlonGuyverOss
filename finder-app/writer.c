@@ -29,20 +29,25 @@ int main (int argc, char * argv[])
     {
         int count = 0;
 
-        printf("Invalid number of arguments.  Need at %d passed to writer.c\n",
+        printf("DEBUG CODE - FGREEN: Student's error message: Invalid number "
+                "of arguments.  Need at %d passed to writer.c\n",
                 NUMBER_OF_WRITER_ARGS);
 
-        syslog(LOG_USER | LOG_ERR, "ERROR: Invalid number of arguments.  "
+        syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: Student's error "
+                "message: ERROR: Invalid number of arguments.  "
                "Need at %d passed to writer.c", NUMBER_OF_WRITER_ARGS);
 
-        printf("Invalid number of arguments.  Passed argc: %d\n", argc);
+        printf("DEBUG CODE - FGREEN: Student's error message: Invalid number "
+                "of arguments.  Passed argc: %d\n", argc);
 
         for (count = 0; count < NUMBER_OF_WRITER_ARGS; count++)
         {
-            printf("Invalid number of arguments.  Passed argv[count] %s\n",
+            printf("DEBUG CODE - FGREEN: Student's error message: Invalid "
+                    "number of arguments.  Passed argv[count] %s\n",
                     argv[count]);
 
-            syslog(LOG_USER | LOG_ERR, "Invalid number of arguments.  "
+            syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: Student's error "
+                    "message: Invalid number of arguments.  "
                     "Passed argv[count] %s\n", argv[count]);
         }
 
@@ -63,8 +68,10 @@ int main (int argc, char * argv[])
 
     if(file_descriptor == -1)
     {
-        printf("Failed to open file.\n");
-        syslog(LOG_USER | LOG_ERR, "ERROR: Failed to open or create file.");
+        printf("DEBUG CODE - FGREEN: Student's error message: Failed to open "
+                "file.\n");
+        syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: Student's error "
+                "message: ERROR: Failed to open or create file.");
         status = __FAIL__;
     }
     else
