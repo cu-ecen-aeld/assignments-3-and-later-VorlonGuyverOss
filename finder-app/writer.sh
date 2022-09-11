@@ -62,7 +62,7 @@ input_error_check()
 }
 
 
-writeFile()
+writeFileWithShellScript()
 {
     tmp_dir=''
     tmp_rev_tmp=''
@@ -118,10 +118,30 @@ writeFile()
     }
     fi
 
+    # Remove temporary working files
+    rm directory_tmp rev_tmp file_to_write_tmp
+
     return 0
 }
 
+writeFileWith_C_Program()
+{
+    make clean
 
+    make all
+
+    path_to_file=$(dirname ${FIRST_INPUT})
+
+    #echo ${path_to_file}
+
+    mkdir -p ${path_to_file}
+
+    ./writer ${FIRST_INPUT} "${SECOND_INPUT}"
+
+    #echo "./writer ${FIRST_INPUT} ${SECOND_INPUT}"
+
+    return 0
+}
 
 
 #Call functions!
@@ -134,18 +154,17 @@ if [ $result -ne 0 ] ; then
 }
 else
 {
-    writeFile
+#    writeFileWithShellScript
+
+    writeFileWith_C_Program
 
     result=$?
     if [ $result -ne 0 ] ; then
     {
-        rm directory_tmp rev_tmp file_to_write_tmp
         echo "ERROR: Exiting now"
         exit 1
     }
     fi
-
-    rm directory_tmp rev_tmp file_to_write_tmp
 
     exit 0
 }
