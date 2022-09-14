@@ -91,15 +91,16 @@ for i in $( seq 1 $NUMFILES) ; do
         echo ""$WRITEDIR/${username}$i.txt" "$WRITESTR""
         writer "$WRITEDIR/${username}$i.txt" "$WRITESTR"
     }
-    elif [ ${SHELL_RETURNED} -eq 0 ] ; then
+#    elif [ ${SHELL_RETURNED} -eq 0 ] ; then
+    else
     {
         echo ""$WRITEDIR/${username}$i.txt" "$WRITESTR""
         ./writer "$WRITEDIR/${username}$i.txt" "$WRITESTR"
     }
-    else
-    {
-        echo "ERROR: Outside of expected range SHELL_RETURNED = ${SHELL_RETURNED}"
-    }
+#    else
+#    {
+#        echo "ERROR: Outside of expected range SHELL_RETURNED = ${SHELL_RETURNED}"
+#    }
     fi
 }
 done
@@ -113,15 +114,16 @@ OUTPUTSTRING=$(./finder.sh "$WRITEDIR" "$WRITESTR")
         echo ""/tmp/assignment-4-result.txt" "${OUTPUTSTRING}""
         writer "/tmp/assignment-4-result.txt" "${OUTPUTSTRING}"
     }
-    elif [ ${SHELL_RETURNED} -eq 0 ] ; then
+#    elif [ ${SHELL_RETURNED} -eq 0 ] ; then
+    else
     {
         echo ""/tmp/assignment-4-result.txt" "${OUTPUTSTRING}""
         ./writer "/tmp/assignment-4-result.txt" "${OUTPUTSTRING}"
     }
-    else
-    {
-        echo "ERROR: Outside of expected range SHELL_RETURNED = ${SHELL_RETURNED}"
-    }
+#     else
+#     {
+#         echo "ERROR: Outside of expected range SHELL_RETURNED = ${SHELL_RETURNED}"
+#     }
     fi
 
 set +e
