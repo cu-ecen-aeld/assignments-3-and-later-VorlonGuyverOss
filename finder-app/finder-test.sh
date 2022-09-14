@@ -77,35 +77,49 @@ echo "SHELL_RETURNED = ${SHELL_RETURNED}"
 
 
 echo "Result of command '$ which writer' is: " $(which writer)
-#which writer
-SHELL_RETURNED=$(echo $?)
+echo $(which writer)
+#SHELL_RETURNED=$($(which writer ; echo $?))
+SHELL_RETURNED=$(echo $(which ls ; echo $?))
+echo ${?}
+#SHELL_RETURNED=$(which writer)
 echo "SHELL_RETURNED = ${SHELL_RETURNED}"
+
+if  $(! which writer > /dev/null) ; then
+    # Empty path
+    SHELL_RETURNED=0
+else
+    SHELL_RETURNED=1
+fi
 
 for i in $( seq 1 $NUMFILES) ; do
 {
 #   ./writer.sh "$WRITEDIR/${username}$i.txt" "$WRITESTR"
 #   ./writer "$WRITEDIR/${username}$i.txt" "$WRITESTR"
 
+echo "FGREEN_0 = ${SHELL_RETURNED}"
     if [ ! ${SHELL_RETURNED} -eq 0 ] ; then
+#    if [ ${SHELL_RETURNED} == "" ] ; then
     {
         echo ""$WRITEDIR/${username}$i.txt" "$WRITESTR""
         writer "$WRITEDIR/${username}$i.txt" "$WRITESTR"
     }
-#    elif [ ${SHELL_RETURNED} -eq 0 ] ; then
-    else
+    elif [ ${SHELL_RETURNED} -eq 0 ] ; then
+#    else
     {
         echo ""$WRITEDIR/${username}$i.txt" "$WRITESTR""
         ./writer "$WRITEDIR/${username}$i.txt" "$WRITESTR"
     }
-#    else
-#    {
-#        echo "ERROR: Outside of expected range SHELL_RETURNED = ${SHELL_RETURNED}"
-#    }
+    else
+    {
+        echo "ERROR: Outside of expected range SHELL_RETURNED = ${SHELL_RETURNED}"
+    }
     fi
 }
 done
 
 OUTPUTSTRING=$(./finder.sh "$WRITEDIR" "$WRITESTR")
+
+echo "FGREEN_1 = ${SHELL_RETURNED}"
 
 # Modify your finder-test.sh script to write a file with output of the finder
 # command to /tmp/assignment-4-result.txt
@@ -114,16 +128,16 @@ OUTPUTSTRING=$(./finder.sh "$WRITEDIR" "$WRITESTR")
         echo ""/tmp/assignment-4-result.txt" "${OUTPUTSTRING}""
         writer "/tmp/assignment-4-result.txt" "${OUTPUTSTRING}"
     }
-#    elif [ ${SHELL_RETURNED} -eq 0 ] ; then
-    else
+    elif [ ${SHELL_RETURNED} -eq 0 ] ; then
+#    else
     {
         echo ""/tmp/assignment-4-result.txt" "${OUTPUTSTRING}""
         ./writer "/tmp/assignment-4-result.txt" "${OUTPUTSTRING}"
     }
-#     else
-#     {
-#         echo "ERROR: Outside of expected range SHELL_RETURNED = ${SHELL_RETURNED}"
-#     }
+    else
+    {
+        echo "ERROR: Outside of expected range SHELL_RETURNED = ${SHELL_RETURNED}"
+    }
     fi
 
 set +e
