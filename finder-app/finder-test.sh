@@ -8,7 +8,31 @@ set -u
 NUMFILES=10
 WRITESTR=AELD_IS_FUN
 WRITEDIR=/tmp/aeld-data
-username=$(cat conf/username.txt)
+#username=$(cat conf/username.txt)
+
+
+if [ -d /etc/finder-app/conf ] ; then
+{
+    echo "Finder App Config file username.txt found!"
+    echo "Found in: /etc/finder-app/conf/username.txt"
+    ls /etc/finder-app/conf
+    username=$(cat /etc/finder-app/conf/username.txt)
+    echo "DEBUG CODE - FGREEN: username = ${username}"
+}
+elif [ -d conf ] ; then
+{
+    echo "Finder App Config file username.txt found!"
+    echo "Found in: conf/username.txt"
+    ls conf/
+    username=$(cat conf/username.txt)
+    echo "DEBUG CODE - FGREEN: username = ${username}"
+
+}
+else
+{
+    username="ERROR: file 'username.txt' not found"
+}
+fi
 
 if [ $# -lt 2 ]
 then
@@ -45,13 +69,60 @@ fi
 #make clean
 #make
 
-for i in $( seq 1 $NUMFILES)
-do
+echo "Result of command '$ which ls' is: " $(which ls)
+which ls
+SHELL_RETURNED=333
+SHELL_RETURNED=$(echo $?)
+echo "SHELL_RETURNED = ${SHELL_RETURNED}"
+
+
+echo "Result of command '$ which writer' is: " $(which writer)
+#which writer
+SHELL_RETURNED=$(echo $?)
+echo "SHELL_RETURNED = ${SHELL_RETURNED}"
+
+for i in $( seq 1 $NUMFILES) ; do
+{
 #   ./writer.sh "$WRITEDIR/${username}$i.txt" "$WRITESTR"
-    ./writer "$WRITEDIR/${username}$i.txt" "$WRITESTR"
+#   ./writer "$WRITEDIR/${username}$i.txt" "$WRITESTR"
+
+    if [ ! ${SHELL_RETURNED} -eq 0 ] ; then
+    {
+        echo ""$WRITEDIR/${username}$i.txt" "$WRITESTR""
+        writer "$WRITEDIR/${username}$i.txt" "$WRITESTR"
+    }
+    elif [ ${SHELL_RETURNED} -eq 0 ] ; then
+    {
+        echo ""$WRITEDIR/${username}$i.txt" "$WRITESTR""
+        ./writer "$WRITEDIR/${username}$i.txt" "$WRITESTR"
+    }
+    else
+    {
+        echo "ERROR: Outside of expected range SHELL_RETURNED = ${SHELL_RETURNED}"
+    }
+    fi
+}
 done
 
 OUTPUTSTRING=$(./finder.sh "$WRITEDIR" "$WRITESTR")
+
+# Modify your finder-test.sh script to write a file with output of the finder
+# command to /tmp/assignment-4-result.txt
+    if [ ! ${SHELL_RETURNED} -eq 0 ] ; then
+    {
+        echo ""/tmp/assignment-4-result.txt" "${OUTPUTSTRING}""
+        writer "/tmp/assignment-4-result.txt" "${OUTPUTSTRING}"
+    }
+    elif [ ${SHELL_RETURNED} -eq 0 ] ; then
+    {
+        echo ""/tmp/assignment-4-result.txt" "${OUTPUTSTRING}""
+        ./writer "/tmp/assignment-4-result.txt" "${OUTPUTSTRING}"
+    }
+    else
+    {
+        echo "ERROR: Outside of expected range SHELL_RETURNED = ${SHELL_RETURNED}"
+    }
+    fi
 
 set +e
 echo ${OUTPUTSTRING} | grep "${MATCHSTR}"

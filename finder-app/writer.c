@@ -7,6 +7,9 @@
 #include <sys/types.h>
 #include <fcntl.h>
 #include <stdbool.h>
+#include <libgen.h>
+
+
 
 
 #define __SUCCESS__ false
@@ -20,10 +23,9 @@ int main (int argc, char * argv[])
 {
     bool status = __FAIL__;
 
-    int file_descriptor;
 
     // Always assume everything fails and check for success.
-    file_descriptor = -1;
+    FILE *file_descriptor = NULL;
 
     if (argc != NUMBER_OF_WRITER_ARGS)
     {
@@ -59,37 +61,83 @@ int main (int argc, char * argv[])
         status = __SUCCESS__;
     }
 
-    // Pointer to the working file, open it, create if necessary, and append.
-    if (status == __SUCCESS__)
-    {
-        file_descriptor = open (argv[1], O_WRONLY | O_CREAT | O_TRUNC, 0664);
-    }
+    char *where_to_write = argv[1];
+    char *what_to_write = argv[2];
+
+    int check = 0;
+
+    size_t message_alloc = 256;
+    char system_message [message_alloc];
+    char where_to_write_was[message_alloc];
 
 
-    if(file_descriptor == -1)
+    memset(system_message, 0, sizeof(system_message));
+    sprintf(where_to_write_was, "%s", where_to_write);
+
+    char *parent_directory = dirname(where_to_write);
+    printf("parent_directory = %s\n", parent_directory);
+
+    sprintf(system_message, "mkdir -vp %s", parent_directory);
+    printf("system_message = %s\n", system_message);
+
+    check = system(system_message);
+
+    // check if directory is created or not
+    if (!check)
     {
-        printf("DEBUG CODE - FGREEN: Student's error message: Failed to open "
-                "file.\n");
-        syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: Student's error "
-                "message: ERROR: Failed to open or create file.");
-        status = __FAIL__;
+        printf("Directory created\n");
+        status = __SUCCESS__;
     }
     else
     {
+        printf("Unable to create directory\n");
+        status = __FAIL__;
+    }
+
+    struct stat st = {0};
+
+    if (stat(parent_directory, &st) == 0)
+    {
+        printf ("Parent directory exists: %s\n", parent_directory);
         status = __SUCCESS__;
     }
-
-    if (status != __FAIL__)
+    else
     {
-        write (file_descriptor, argv[2], strlen(argv[2]));
-        syslog(LOG_USER | LOG_DEBUG, "Writing (%s) to (%s)",
-                argv[2], argv[1]);
+        printf ("SYSTEM FAIL: Parent directory does NOT exist: %s\n", parent_directory);
+        status = __FAIL__;
     }
 
-    // CLOSE file and free pointer
-    if(file_descriptor != -1)
+    // Pointer to the working file, open it, create if necessary, and append.
+    if (status == __SUCCESS__)
     {
-        close(file_descriptor);
+        file_descriptor = fopen (where_to_write_was, "w+");
+
+        if(file_descriptor == NULL)
+        {
+            printf("DEBUG CODE - FGREEN: Student's error message: Failed to open "
+                    "file.\n");
+            syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: Student's error "
+                    "message: ERROR: Failed to open or create file.");
+            status = __FAIL__;
+        }
+        else
+        {
+            status = __SUCCESS__;
+        }
+
+        if (status != __FAIL__)
+        {
+            fwrite (what_to_write, 1, strlen(what_to_write), file_descriptor);
+            syslog(LOG_USER | LOG_DEBUG, "Writing (%s) to (%s)",
+                    argv[2], argv[1]);
+        }
+
+        // CLOSE file and free pointer
+        if(file_descriptor != NULL)
+        {
+            fflush(file_descriptor);
+            fclose(file_descriptor);
+        }
     }
 
 
