@@ -143,6 +143,7 @@ else
 {
     echo "ERROR: Outside of expected range SHELL_RETURNED = ${SHELL_RETURNED}"
 }
+fi
 
 
 if [ ! ${SHELL_RETURNED} -eq 0 ] ; then
