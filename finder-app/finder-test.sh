@@ -123,24 +123,45 @@ echo "FGREEN_1 = ${SHELL_RETURNED}"
 
 # Modify your finder-test.sh script to write a file with output of the finder
 # command to /tmp/assignment-4-result.txt
-    if [ ! ${SHELL_RETURNED} -eq 0 ] ; then
-    {
-        OUTPUTSTRING=$(finder.sh "$WRITEDIR" "$WRITESTR")
-        echo ""/tmp/assignment-4-result.txt" "${OUTPUTSTRING}""
-        writer "/tmp/assignment-4-result.txt" "${OUTPUTSTRING}"
-    }
-    elif [ ${SHELL_RETURNED} -eq 0 ] ; then
-#    else
-    {
-        OUTPUTSTRING=$(./finder.sh "$WRITEDIR" "$WRITESTR")
-        echo ""/tmp/assignment-4-result.txt" "${OUTPUTSTRING}""
-        ./writer "/tmp/assignment-4-result.txt" "${OUTPUTSTRING}"
-    }
-    else
-    {
-        echo "ERROR: Outside of expected range SHELL_RETURNED = ${SHELL_RETURNED}"
-    }
-    fi
+
+if  $(! which finder.sh > /dev/null) ; then
+    # Empty path
+    SHELL_RETURNED_FINDER=0
+else
+    SHELL_RETURNED_FINDER=1
+fi
+
+if [ ! ${SHELL_RETURNED_FINDER} -eq 0 ] ; then
+{
+    OUTPUTSTRING=$(finder.sh "$WRITEDIR" "$WRITESTR")
+}
+elif [ ${SHELL_RETURNED_FINDER} -eq 0 ] ; then
+ else
+{
+    OUTPUTSTRING=$(./finder.sh "$WRITEDIR" "$WRITESTR")
+}
+else
+{
+    echo "ERROR: Outside of expected range SHELL_RETURNED = ${SHELL_RETURNED}"
+}
+
+
+if [ ! ${SHELL_RETURNED} -eq 0 ] ; then
+{
+    echo ""/tmp/assignment-4-result.txt" "${OUTPUTSTRING}""
+    writer "/tmp/assignment-4-result.txt" "${OUTPUTSTRING}"
+}
+elif [ ${SHELL_RETURNED} -eq 0 ] ; then
+ else
+{
+    echo ""/tmp/assignment-4-result.txt" "${OUTPUTSTRING}""
+    ./writer "/tmp/assignment-4-result.txt" "${OUTPUTSTRING}"
+}
+else
+{
+    echo "ERROR: Outside of expected range SHELL_RETURNED = ${SHELL_RETURNED}"
+}
+fi
 
 set +e
 echo ${OUTPUTSTRING} | grep "${MATCHSTR}"
