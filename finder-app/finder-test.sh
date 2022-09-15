@@ -117,7 +117,7 @@ echo "FGREEN_0 = ${SHELL_RETURNED}"
 }
 done
 
-OUTPUTSTRING=$(./finder.sh "$WRITEDIR" "$WRITESTR")
+#OUTPUTSTRING=$(./finder.sh "$WRITEDIR" "$WRITESTR")
 
 echo "FGREEN_1 = ${SHELL_RETURNED}"
 
@@ -125,12 +125,14 @@ echo "FGREEN_1 = ${SHELL_RETURNED}"
 # command to /tmp/assignment-4-result.txt
     if [ ! ${SHELL_RETURNED} -eq 0 ] ; then
     {
+        OUTPUTSTRING=$(finder.sh "$WRITEDIR" "$WRITESTR")
         echo ""/tmp/assignment-4-result.txt" "${OUTPUTSTRING}""
         writer "/tmp/assignment-4-result.txt" "${OUTPUTSTRING}"
     }
     elif [ ${SHELL_RETURNED} -eq 0 ] ; then
 #    else
     {
+        OUTPUTSTRING=$(./finder.sh "$WRITEDIR" "$WRITESTR")
         echo ""/tmp/assignment-4-result.txt" "${OUTPUTSTRING}""
         ./writer "/tmp/assignment-4-result.txt" "${OUTPUTSTRING}"
     }
