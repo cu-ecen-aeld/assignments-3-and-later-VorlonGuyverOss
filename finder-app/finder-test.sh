@@ -136,7 +136,6 @@ if [ ! ${SHELL_RETURNED_FINDER} -eq 0 ] ; then
     OUTPUTSTRING=$(finder.sh "$WRITEDIR" "$WRITESTR")
 }
 elif [ ${SHELL_RETURNED_FINDER} -eq 0 ] ; then
- else
 {
     OUTPUTSTRING=$(./finder.sh "$WRITEDIR" "$WRITESTR")
 }
@@ -152,7 +151,6 @@ if [ ! ${SHELL_RETURNED} -eq 0 ] ; then
     writer "/tmp/assignment-4-result.txt" "${OUTPUTSTRING}"
 }
 elif [ ${SHELL_RETURNED} -eq 0 ] ; then
- else
 {
     echo ""/tmp/assignment-4-result.txt" "${OUTPUTSTRING}""
     ./writer "/tmp/assignment-4-result.txt" "${OUTPUTSTRING}"
