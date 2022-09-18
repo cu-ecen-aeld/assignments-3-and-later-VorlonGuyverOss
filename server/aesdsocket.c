@@ -688,9 +688,9 @@ void serve_clients_FGREEN()
 
                 num_bytes_written += write_count_counter;
 
-                debug_array[debug_array_counter] = system_input_character;
+//                debug_array[debug_array_counter] = system_input_character;
 
-                debug_array_counter++;
+//                debug_array_counter++;
 
                 if(system_input_character == '\n')
                 {
@@ -783,7 +783,7 @@ void serve_clients_FGREEN()
             read_count_counter = (unsigned long) fread(what_to_read,
                     num_bytes_written, 1, file_descriptor);
 
-            sprintf(system_message, "%s", what_to_read);
+//            sprintf(system_message, "%s", what_to_read);
 
             printf("DEBUG CODE- FGREEN: num_bytes_written: %lu\n", num_bytes_written);
             printf("DEBUG CODE - FGREEN num_bytes_written_total: %lu\n", num_bytes_written_total);
@@ -1541,6 +1541,7 @@ int main(int argc, char ** argv)
 {
     int function_status = __LOCAL_FAIL__;
 
+    remove_temporary_file();
     local_circular_buffer = create_local_buffer(SIZE_OF_LOCAL_BUFFER);
 
     char hostname[64];
