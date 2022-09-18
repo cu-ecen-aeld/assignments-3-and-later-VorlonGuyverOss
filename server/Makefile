@@ -1,21 +1,43 @@
-OBJECTS =	aesdsocket.o
 
-CC = gcc
+INCLUDE_DIRS =
+LIB_DIRS =
 
-INCLUDES = -I.
+CC = $(CROSS_COMPILE)gcc
+
+CDEFS=
+CFLAGS= -O0 $(INCLUDE_DIRS) $(CDEFS)
+LIBS=
 
 LDFLAGS = -g -Wall
 
-LIBS = -lm
+OBJECTS =	aesdsocket.o
 
-all: aesdsocket
+
+LIBS = -lm
+INCLUDES = -I.
+
+TARGET= aesdsocket
+
+HFILES=
+CFILES= aesdsocket.c
+
+
+
+
+SRCS= ${HFILES} ${CFILES}
+OBJS= ${CFILES:.c=.o}
+
+all:	${TARGET}
 
 aesdsocket: aesdsocket.o
-	$(CC) $(LDFLAGS) $(LIBS) $^ -o $@
+	$(CC) $(LDFLAGS) $(LIBS) $(CFLAGS) $^ -o $@
+
+clean :
+	echo *.o *.i *.s *~ \#*# core .#* .new* aesdsocket
+	rm -f *.o *.i *.s *~ ${TARGET} \#*# core .#* .new* aesdsocket
+
+depend:
 
 .c.o:
 	$(CC) $(LDFLAGS) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
-clean :
-	echo *.o *.i *.s *~ \#*# core .#* .new* aesdsocket
-	rm -f *.o *.i *.s *~ \#*# core .#* .new* aesdsocket
