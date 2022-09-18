@@ -51,8 +51,8 @@ extern void serve_clients_FGREEN();
 static int server_sock, client_sock;
 //static int fromlen, i, j, num_sets;
 //static int i, j, num_sets;
-static int j, num_sets;
-static unsigned long i;
+//static int j, num_sets;
+//static unsigned long i;
 //static int j, num_sets;
 static socklen_t fromlen;
 static FILE *fp;
@@ -148,7 +148,76 @@ int local_buff_pop(localCircularBuffer_t *pointer, const void *p, unsigned int *
 
 
 
+// The function is to turn the process of calling the function into a daemon.
+void create_daemon(void)
+{
+    pid_t pid = 0;
 
+    pid = fork();
+
+    if (pid < 0)
+    {
+        perror("Program 'aesdsocket' FAILED to fork.");
+        syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: Program 'aesdsocket'"
+            " FAILED to fork.");
+
+        exit(-1);
+    }
+
+    if (pid > 0)
+    {
+        syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: Program 'aesdsocket'"
+            " SUCCESSFULLY forked.  The parent program exited. The dameon"
+            " PID is %d", pid);
+
+        exit(0);
+    }
+
+    // Implementing it here is the child process
+    //
+    // SetsID sets the current process to the new session period session,
+    // the purpose is to let the current process detach from the console.
+    pid = setsid();
+    if (pid < 0)
+    {
+        perror("Program 'aesdsocket' FAILED to setsid.");
+        syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: Program 'aesdsocket'"
+            " FAILED setsid.");
+
+        exit(-1);
+    }
+    else
+    {
+        syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: Program 'aesdsocket'"
+            " set new ID from setsid(). The dameon new PID is %d", pid);
+    }
+
+    // Set the current process work directory to root directory
+    chdir("/");
+
+    // UMASK setting to '0' to ensure that future processes have the greatest
+    // file operation permissions
+    umask(0);
+
+    // Turn off all file descriptors
+    // First get the maximum number of file descriptors allowed to open in
+    // current system
+
+    int count = sysconf(_SC_OPEN_MAX);
+    int number = 0;
+    for (number = 0; number < count; number++)
+    {
+        close (number);
+    }
+
+
+    open("dev/null", O_RDWR);
+    open("dev/null", O_RDWR);
+    open("dev/null", O_RDWR);
+
+//
+
+}
 
 
 
@@ -252,7 +321,7 @@ int write_to_file_FGREEN(char * where, unsigned long * num_bytes_written)
 
     static char system_input_character;
 
-    int check = 0;
+    //int check = 0;
     int breaker = FILE_WRITE_TIMEOUT;
 
     size_t message_alloc = 256;
@@ -524,7 +593,7 @@ void serve_clients_FGREEN()
     unsigned long num_bytes_written_total = 0;
 
     //    unsigned long *pointer_num_bytes_read = &num_bytes_read;
-    unsigned long *pointer_num_bytes_written = &num_bytes_written;
+    //unsigned long *pointer_num_bytes_written = &num_bytes_written;
 
     char *what_to_read;
 
@@ -534,26 +603,26 @@ void serve_clients_FGREEN()
     FILE *file_descriptor = NULL;
 
     static char system_input_character;
-    static char system_output_character;
+    //static char system_output_character;
 
     char debug_array[2048];
-    int debug_array_counter = 0;
+    //int debug_array_counter = 0;
     memset(debug_array, 0, sizeof(debug_array));
 
-    int check = 0;
+    //int check = 0;
     int breaker = FILE_WRITE_TIMEOUT;
-    int count_counter = 0;
-    int file_amount_to_read = 0;
+    //int count_counter = 0;
+    //int file_amount_to_read = 0;
 
     size_t message_alloc = 256;
     char system_message [message_alloc];
 
-    int i =0;
+    //int i =0;
     unsigned long write_count_counter = 0;
     unsigned long read_count_counter = 0;
     int read_file_position_is = 0;
     int read_file_position_was = 0;
-    int read_count = 0;
+    //int read_count = 0;
 
     memset(path_to_write, 0, sizeof(path_to_write));
     memset(hostname, 0, sizeof(hostname));
@@ -789,6 +858,7 @@ void serve_clients_FGREEN()
             printf("DEBUG CODE - FGREEN num_bytes_written_total: %lu\n", num_bytes_written_total);
             printf("DEBUG CODE- FGREEN: read_file_position_is: %d\n", read_file_position_is);
             printf("DEBUG CODE - FGREEN: read_file_position_was: %d\n", read_file_position_was);
+            printf("DEBUG CODE - FGREEN: read_count_counter: %lu\n", read_count_counter);
 
             if (what_to_read[num_bytes_written - 1] != '\n')
             {
@@ -808,7 +878,7 @@ void serve_clients_FGREEN()
 //            system_output_character = getc(file_descriptor); This line causes
 //            my computer to create a spaced input file.
 
-            read_count = 0;
+            //read_count = 0;
 //            for (i = 0; i < read_file_position_is; i++)
 //#endif
 //                for (i=0; i< num_bytes_written; i++)
@@ -1639,6 +1709,17 @@ int main(int argc, char ** argv)
     {
         perror("Server: bind");
         exit(-1);
+    }
+    else
+    {
+        if (argc <= 2 && strcmp(argv[1], "-d") == 0)
+        {
+            syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: User passed in "
+                    " the create dameon argurment '-d'.  "
+                    "Entering 'create_daemon ()");
+
+            create_daemon();
+        }
     }
 
     /* turn on zero linger time so that undelivered data is discarded when

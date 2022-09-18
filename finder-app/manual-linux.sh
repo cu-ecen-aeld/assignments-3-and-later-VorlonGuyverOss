@@ -122,6 +122,10 @@ sudo mknod -m 600 dev/console c 5 1
 echo "14) Clean and build the writer utility"
 cd ${FINDER_APP_DIR}
 make clean CROSS_COMPILE=${CROSS_COMPILE} all
+cd ${FINDER_APP_DIR}/../server
+make clean CROSS_COMPILE=${CROSS_COMPILE} all
+cd ${FINDER_APP_DIR}
+
 
 # TODO: Copy the finder related scripts and executables to the /home directory
 # on the target rootfs
@@ -131,6 +135,10 @@ cp -at ${OUTDIR}/rootfs/home writer autorun-qemu.sh finder-test.sh finder.sh
 cp -art ${OUTDIR}/rootfs/home conf/
 mkdir -p ${OUTDIR}/rootfs/home/conf
 cp -at ${OUTDIR}/rootfs/home/conf conf/username.txt
+mkdir -p ${OUTDIR}/rootfs/home/server/
+cp -at ${OUTDIR}/rootfs/home/server ${FINDER_APP_DIR}/../server/aesdsocket.c
+cp -at ${OUTDIR}/rootfs/home/server ${FINDER_APP_DIR}/../server/aesdsocket
+cp -at ${OUTDIR}/rootfs/home/server ${FINDER_APP_DIR}/../server/Makefile
 
 
 # TODO: Chown the root directory
