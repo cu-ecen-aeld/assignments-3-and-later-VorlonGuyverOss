@@ -145,9 +145,35 @@ int local_buff_pop(localCircularBuffer_t *pointer, const void *p, unsigned int *
     return 0; // return success
 }
 
+// The function is to turn the process of calling the function into a daemon.
+void create_daemon(void)
+{
+    pid_t pid = 0;
+
+    pid = fork();
+
+    if (pid < 0)
+    {
+        perror("Program 'aesdsocket' FAILED to fork.");
+        syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: Program 'aesdsocket'"
+            " FAILED to fork.");
+
+        exit(-1);
+    }
+
+    if (pid > 0)
+    {
+        syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: Program 'aesdsocket'"
+            " SUCCESSFULLY forked.  The parent program exited. The dameon"
+            " PID is %d", pid);
+
+        exit(0);
+    }
+
+}
 
 
-
+#if 0
 // The function is to turn the process of calling the function into a daemon.
 void create_daemon(void)
 {
@@ -218,7 +244,66 @@ void create_daemon(void)
 //
 
 }
+#endif
 
+void external_process_daemon_kill_function(void)
+{
+    // Always assume everything fails and check for success.
+    FILE *file_descriptor = NULL;
+
+    int read_file_position_is = 0;
+
+    system("touch /tmp/aesdsocketKillMe.txt");
+
+    // Pointer to the working file, open it, create if necessary, and append.
+    file_descriptor = fopen ("/tmp/aesdsocketKillMe.txt", "a+");
+
+    if(file_descriptor == NULL)
+    {
+        syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: Student's error "
+                "message: ERROR: Opening file failed to open or create file.");
+    }
+    else
+    {
+        //fseek(file_descriptor, 0L, SEEK_SET);
+        fseek(file_descriptor, 0L, SEEK_END);
+
+        read_file_position_is = ftell(file_descriptor);
+
+        fseek(file_descriptor, 0L, SEEK_SET);
+
+        char *what_to_read;
+
+        what_to_read = (char*)malloc(read_file_position_is + 1);
+
+        if (what_to_read == NULL)
+        {
+            printf("Error reallocating space for 'what_to_read'");
+        }
+
+        memset(what_to_read, 0, sizeof(read_file_position_is + 1));
+
+
+        fread(what_to_read, read_file_position_is, 1, file_descriptor);
+
+        if(strcmp(what_to_read, "true") == 0)
+        {
+            fflush(file_descriptor);
+            fclose(file_descriptor);
+
+            terminate_program_handler();
+
+        }
+
+        free(what_to_read);
+
+        if(file_descriptor != NULL)
+        {
+            fflush(file_descriptor);
+            fclose(file_descriptor);
+        }
+    }
+}
 
 
 void remove_temporary_file()
@@ -595,9 +680,9 @@ void serve_clients_FGREEN()
     //    unsigned long *pointer_num_bytes_read = &num_bytes_read;
     //unsigned long *pointer_num_bytes_written = &num_bytes_written;
 
-    char *what_to_read;
-
-    what_to_read = (char*)malloc(2048*sizeof(char));
+//    char *what_to_read;
+//
+//    what_to_read = (char*)malloc(2048*sizeof(char));
 
     // Always assume everything fails and check for success.
     FILE *file_descriptor = NULL;
@@ -829,8 +914,12 @@ void serve_clients_FGREEN()
             // Total file size minus the number just written
             // should the the section needed to pas the test.
 
-            what_to_read = realloc(what_to_read,
-                    (read_file_position_is + 1));
+
+            char *what_to_read;
+
+            what_to_read = (char*)malloc(read_file_position_is + 1);
+//            what_to_read = realloc(what_to_read,
+//                    (read_file_position_is + 1));
 
             if (what_to_read == NULL)
             {
@@ -1032,9 +1121,14 @@ void serve_clients_FGREEN()
                     "num_bytes_read", system_message, FILE_TO_WRITE_TO, num_bytes_read);
 
             read_file_position_was = read_file_position_is;
+
+
+            // Free pointer
+            free(what_to_read);
+
+            external_process_daemon_kill_function();
         }
 
-        // CLOSE file and free pointer
         if(file_descriptor != NULL)
         {
             fflush(file_descriptor);
@@ -1603,6 +1697,8 @@ void terminate_program_handler()
             "terminate_program_handler(): terminating program");
 
     remove_temporary_file();
+    close(client_sock);
+    close(server_sock);
 
     exit(0);
 }
@@ -1611,13 +1707,21 @@ int main(int argc, char ** argv)
 {
     int function_status = __LOCAL_FAIL__;
 
-    remove_temporary_file();
+    if (argc >= 2 && strcmp(argv[1], "-delete_working_file") == 0)
+    {
+        remove_temporary_file();
+    }
+
     local_circular_buffer = create_local_buffer(SIZE_OF_LOCAL_BUFFER);
 
     char hostname[64];
     struct hostent *hp;
     struct linger opt;
     int sockarg;
+    unsigned int sock_option = 1;
+    unsigned int sock_length = 0;
+    char *sock_option_val;
+
 
 //    char data_caracter;
 //    FILE *file_pointer;
@@ -1702,17 +1806,45 @@ int main(int argc, char ** argv)
     inet_pton(AF_INET, SYSTEM_TCP_IP_ADDRESS, &(server_sockaddr.sin_addr));
     // DEBUG CODE ABOVE - FGREEN
 
+    if(getsockopt(server_sock, SOL_SOCKET, SO_REUSEADDR, &sock_option, &sock_length) < 0)
+    {
+        syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: getsockopt() failed."
+                " sock_option = %d, sock_length = %d", sock_option, sock_length);
+    }
+    else
+    {
+        syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: getsockopt() success"
+                ".  sock_option = %d, sock_length = %d", sock_option, sock_length);
+    }
+
+
+    sock_option_val = "localhost";
+    if(setsockopt(server_sock, SOL_SOCKET, SO_REUSEADDR, sock_option_val, 4) < 0)
+    {
+        syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: setsockopt() failed."
+                " sock_option = %d, sock_option_val = %c", sock_option,
+                *sock_option_val);
+        exit(-1);
+    }
+    else
+    {
+        syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: setsockopt() succes"
+                " sock_option = %d, sock_option_val = %s", sock_option,
+                sock_option_val);
+    }
+
 
     /* Bind address to the socket */
     if(bind(server_sock, (struct sockaddr *) &server_sockaddr,
                 sizeof(server_sockaddr)) < 0)
     {
         perror("Server: bind");
+        syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: bind() failed.");
         exit(-1);
     }
     else
     {
-        if (argc <= 2 && strcmp(argv[1], "-d") == 0)
+        if (argc >= 2 && strcmp(argv[1], "-d") == 0)
         {
             syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: User passed in "
                     " the create dameon argurment '-d'.  "
