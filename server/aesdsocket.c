@@ -23,7 +23,8 @@
 #define SIZE_OF_LOCAL_BUFFER 256
 //#define SYSTEM_TCP_IP_ADDRESS   "10.0.10.30"
 //#define SYSTEM_TCP_IP_ADDRESS   "localhost"
-#define SYSTEM_TCP_IP_ADDRESS   "127.0.0.1"
+//#define SYSTEM_TCP_IP_ADDRESS   "127.0.0.1"
+#define SYSTEM_TCP_IP_ADDRESS   "10.0.2.15"
 #define FILE_WRITE_TIMEOUT      10000000
 #define FILE_TO_WRITE_TO        "/var/tmp/aesdsocketdata"
 //#define FILE_TO_WRITE_TO        "tmp/tmp/aesdsocketdata"
