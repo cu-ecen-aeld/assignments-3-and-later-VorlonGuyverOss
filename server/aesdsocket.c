@@ -25,6 +25,8 @@
 //#define SYSTEM_TCP_IP_ADDRESS   "localhost"
 //#define SYSTEM_TCP_IP_ADDRESS   "127.0.0.1"
 #define SYSTEM_TCP_IP_ADDRESS   "10.0.2.15"
+//#define SYSTEM_SOCK_OPTION_VAL  "localhost";
+#define SYSTEM_SOCK_OPTION_VAL  "eth0";
 #define FILE_WRITE_TIMEOUT      10000000
 #define FILE_TO_WRITE_TO        "/var/tmp/aesdsocketdata"
 //#define FILE_TO_WRITE_TO        "tmp/tmp/aesdsocketdata"
@@ -637,7 +639,7 @@ int main(int argc, char ** argv)
     }
 
 
-    sock_option_val = "localhost";
+    sock_option_val = SYSTEM_SOCK_OPTION_VAL;
     if(setsockopt(server_sock, SOL_SOCKET, SO_REUSEADDR, sock_option_val, 4) < 0)
     {
         syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: setsockopt() failed."
