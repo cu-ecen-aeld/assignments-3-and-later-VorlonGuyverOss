@@ -8,7 +8,7 @@ CDEFS=
 CFLAGS= -O0 $(INCLUDE_DIRS) $(CDEFS)
 LIBS=
 
-LDFLAGS = -g -Wall -Werror
+LDFLAGS = -g -Wall -Werror -pthread
 
 DAEMON_FLAGS =
 

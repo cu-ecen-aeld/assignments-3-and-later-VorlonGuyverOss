@@ -8,9 +8,10 @@
 #include <fcntl.h>
 #include <stdbool.h>
 #include <libgen.h>
+#include <sys/syslog.h>
 
 
-
+#define UNIVERSITY_OF_COLORADO_BOULDER_COURSEA "ECEA-5306 Assignment 6"
 
 #define __SUCCESS__ false
 #define __FAIL__    true
@@ -60,6 +61,8 @@ int main (int argc, char * argv[])
     {
         status = __SUCCESS__;
     }
+
+    syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: %s", UNIVERSITY_OF_COLORADO_BOULDER_COURSEA);
 
     char *where_to_write = argv[1];
     char *what_to_write = argv[2];
@@ -140,6 +143,7 @@ int main (int argc, char * argv[])
         }
     }
 
+    syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: %s", UNIVERSITY_OF_COLORADO_BOULDER_COURSEA);
 
     exit (status);
 }
