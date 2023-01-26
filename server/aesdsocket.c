@@ -52,7 +52,6 @@ char *test_strs[NSTRS] = {
 #define __LOCAL_FAIL__ 1
 
 extern int errno;
-void* set_timer(void);
 extern void broken_pipe_handler();
 extern void terminate_program_handler();
 //extern void alarm_program_handler();
@@ -184,46 +183,6 @@ void init_linked_lists(void)
 {
     SLIST_INIT(&head);
     assert(SLIST_EMPTY(&head) && "SList init");
-}
-
-//Set timer 
-void* set_timer(void)
-{
-    int time_value = 0;
-    
-    struct itimerval timer_0;
-    getitimer(ITIMER_REAL, &timer_0);
-    timer_0.it_value.tv_sec = 10;
-    timer_0.it_value.tv_usec = 0;
-    timer_0.it_interval.tv_sec = 10;
-    timer_0.it_interval.tv_usec = 0;
-
-    time_value = setitimer(ITIMER_REAL, &timer_0, NULL);
-
-    if(time_value != 0)
-    {
-        perror("set_timer failed"); 
-        syslog(LOG_INFO | LOG_ERR, "DEBUG CODE - FGREEN: set_timer() FAILED ");
-    }
-   
-   return 0;
-}
-
-
-// Clear timer
-int clear_timer(void)
-{
-    int time_value = 0;
-    
-    struct itimerval timer_0;
-    getitimer(ITIMER_REAL, &timer_0);
-    timer_0.it_value.tv_sec = 0;
-    timer_0.it_value.tv_usec = 0;
-    timer_0.it_interval.tv_sec = 0;
-    timer_0.it_interval.tv_usec = 0;
-    time_value = setitimer(ITIMER_REAL, &timer_0, NULL);
-    
-    return (time_value);
 }
 
 
