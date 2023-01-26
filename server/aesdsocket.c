@@ -1,6 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
-#include <sys/syslog.h>
+#include <syslog.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/queue.h>
@@ -15,37 +15,36 @@
 #include <fcntl.h>
 #include <stdbool.h>
 #include <libgen.h>
-#include <errno.h>
 #include <sys/time.h>
 #include <pthread.h>
+#include <assert.h>
 
-#define UNIVERSITY_OF_COLORADO_BOULDER_COURSERA "ECEA-5306 Assignment 6"
 
 #define NSTRS                   4
 #define MAX_IT                  1
 #define LOCAL_PORT              54321
 #define DEFAULT_PORT            9000
-//#define SIZE_OF_LOCAL_BUFFER 256
-#define SIZE_OF_LOCAL_BUFFER    1024
+#define SIZE_OF_LOCAL_BUFFER 256
 //#define SYSTEM_TCP_IP_ADDRESS   "10.0.10.30"
-//#define SYSTEM_TCP_IP_ADDRESS   "localhost" // SCHOOL DEFINED
-#define SYSTEM_TCP_IP_ADDRESS   "127.0.0.1" //STUDENT EQUIPMENT also required for test assignment to work
-//USE THIS ONE#define SYSTEM_TCP_IP_ADDRESS   "10.0.2.15"
-//#define SYSTEM_SOCK_OPTION_VAL  "localhost"; // SCHOOL DEFINED
-#define SYSTEM_SOCK_OPTION_VAL  "eth0"; // STUDENT EQUIPMENT also required for test assignment to work
-//#define SYSTEM_SOCK_OPTION_VAL  "eno1"; // STUDENT EQUIPMENT
+//#define SYSTEM_TCP_IP_ADDRESS   "localhost"
+#define SYSTEM_TCP_IP_ADDRESS   "127.0.0.1"  //<<<< USE THIS ON LINUX LAPTOP
+//#define SYSTEM_TCP_IP_ADDRESS   "10.0.2.15" <-- was originally
+#define SYSTEM_SOCK_OPTION_VAL  "localhost" //<<<< USE THIS ON LINUX LAPTOP
+//#define SYSTEM_SOCK_OPTION_VAL  "eth0";
 #define FILE_WRITE_TIMEOUT      10000000
-#define FILE_TO_WRITE_TO        "/var/tmp/aesdsocketdata" //SCHOOL DEFINED
-//#define FILE_TO_WRITE_TO        "/tmp/tmp/aesdsocketdata"
+#define FILE_TO_WRITE_TO        "/var/tmp/aesdsocketdata"
+#define FILE_TO_READ_TO        "/var/tmp/.tmp_aesdsocketdata"
+//#define FILE_TO_WRITE_TO        "tmp/tmp/aesdsocketdata"
 //#define LOCAL_PORT 3
 #define ADD_BUSYBOX_IP "ip address add 10.0.10.90/24 brd 10.0.10.255 dev eth0"
-#define BACKLOG 5
+
+#define PROGRAM_BUFFER_MAX 256
 
 char *test_strs[NSTRS] = {
     "This is the first server string.\n",
     "This is the second server string.\n",
     "This is the third server string.\n",
-    "Server sends: \"This has been the an assignment of ECEA 5306 Coursera "
+    "Server sends: \"This has been the an assignment of ECEA 5305 Coursera "
         "edition.\"\n"
 };
 
@@ -53,38 +52,46 @@ char *test_strs[NSTRS] = {
 #define __LOCAL_FAIL__ 1
 
 extern int errno;
+void* set_timer(void);
 extern void broken_pipe_handler();
 extern void terminate_program_handler();
-extern void alarm_program_handler();
+//extern void alarm_program_handler();
 extern void external_interrupt_handler();
-extern void serve_clients_FGREEN();
+extern void *serve_clients_FGREEN(void* threadp);
+void *timer_thread();
 
-pthread_mutex_t sharedMemMutexSemaphore;
-pthread_mutexattr_t rt_safet;
-
-static int server_sock, client_sock; //, new_sockfd;
-static FILE *fp;
-static struct sockaddr_in server_sockaddr, client_sockaddr;
-bool interrupted = false;
-
-struct addrinfo *server_info = NULL;
-int total_connections = 0;
+static int server_sock, client_sock;
+static FILE *fp = NULL;
+static struct sockaddr_in server_sockaddr; //, client_sockaddr;
 bool alarm_timer = false;
 
-// Data thread structure
-struct data_thread
+// Client THREADS
+struct thread_data
 {
-    pthread_t thread_id;
-    int counter;
+    pthread_t* thread_id;
+    struct sockaddr_in client_sockaddr;
+    int client_data;
+    int finished;
     int socketfd;
-    struct sockaddr_in * client;
-    bool connection_completion_success;
-    struct sockaddr_storage client_address_storage;
-    SLIST_ENTRY(data_thread) entries; 
+    bool connection_complete;
 };
 
-SLIST_HEAD(slisthead, data_thread) head=SLIST_HEAD_INITIALIZER(&head);
 
+typedef struct thread_data thread_info_t;
+
+struct slist_data_s 
+{
+    thread_info_t* thread;
+    int count;
+    SLIST_ENTRY(slist_data_s) entries;
+};
+
+typedef struct slist_data_s slist_data_t;
+
+slist_data_t *datap = NULL;
+SLIST_HEAD(slisthead, slist_data_s) head;
+
+pthread_mutex_t sharedMemMutexSemaphore;
 
 // The function is to turn the process of calling the function into a daemon.
 void create_daemon(void)
@@ -112,6 +119,7 @@ void create_daemon(void)
     }
 
 }
+        
 
 void external_process_daemon_kill_function(void)
 {
@@ -172,8 +180,15 @@ void external_process_daemon_kill_function(void)
     }
 }
 
-// Set timer 
-int set_timer(void)
+//linked list
+void init_linked_lists(void)
+{
+    SLIST_INIT(&head);
+    assert(SLIST_EMPTY(&head) && "SList init");
+}
+
+//Set timer 
+void* set_timer(void)
 {
     int time_value = 0;
     
@@ -183,9 +198,16 @@ int set_timer(void)
     timer_0.it_value.tv_usec = 0;
     timer_0.it_interval.tv_sec = 10;
     timer_0.it_interval.tv_usec = 0;
+
     time_value = setitimer(ITIMER_REAL, &timer_0, NULL);
-    
-    return (time_value);
+
+    if(time_value != 0)
+    {
+        perror("set_timer failed"); 
+        syslog(LOG_INFO | LOG_ERR, "DEBUG CODE - FGREEN: set_timer() FAILED ");
+    }
+   
+   return 0;
 }
 
 
@@ -206,7 +228,119 @@ int clear_timer(void)
 }
 
 
-void remove_temporary_file(void)
+// DEBUG CODE BELOW - FGREEN WAS NOT HERE
+/* Required timer tracking */
+int write_timer(FILE *file_descriptor)
+{
+   syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: Entering write_timer()");
+   char buffer [256];
+   char local_string [256] = {};
+   int num_bytes_written = 0;
+   const char* time_format = "%a, %d %b %Y %T %z";
+  ///strftime(timestr, sizeof(timestr), "%a, %d %b %Y %T %z", tmp);
+   time_t local_time;
+   struct tm *timestamp;
+   
+   local_time =  time(NULL);
+   
+   timestamp = localtime(&local_time); 
+   
+   if (timestamp == NULL)
+   {
+       perror("DEBUG CODE - FGREEN: localtime() failed");
+       syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: write_timer() FAIL ");
+
+       return (-1);
+   }  
+
+   if(strftime(local_string, sizeof(local_string), time_format, timestamp) == 0)
+   { 
+       return (-1);
+   }
+
+   strcpy(buffer, "timestamp:");
+   strcat(buffer, local_string);
+   strcat(buffer, "\n");
+
+   //pthread_mutex_lock(&sharedMemMutexSemaphore);
+   num_bytes_written = fwrite (buffer, 1, strlen(buffer), file_descriptor);
+   //pthread_mutex_unlock(&sharedMemMutexSemaphore);
+   
+   if (num_bytes_written != 0)
+   {
+       syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: write_timer() - "
+              "fwrite() SUCCESS.  num_bytes_written = {%d}, buffer: {%s}"
+              , num_bytes_written , buffer);
+   }
+   else
+   {
+       syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: write_timer() - "
+              "fwrite() FAILED.  num_bytes_written = {%d}, buffer: {%s}"
+              , num_bytes_written, buffer);
+   }
+
+   syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: Exiting write_timer()");
+   return (0); 
+}
+
+void* timer_thread()
+{
+  int function_return_status = 0;
+  //char timestr[200];
+  time_t t;
+  struct tm *tmp;
+
+  for(;;) {
+    sleep(10);
+    t = time(NULL);
+    tmp = localtime(&t);
+    if (tmp == NULL) {
+      perror("localtime");
+      exit(EXIT_FAILURE);
+    }
+
+    ///pthread_mutex_lock(&sharedMemMutexSemaphore);
+    ///strftime(timestr, sizeof(timestr), "%a, %d %b %Y %T %z", tmp);
+    ///fprintf(fp, "timestamp:%s\n", timestr);
+    ///pthread_mutex_unlock(&sharedMemMutexSemaphore);
+
+
+    syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: 3 of 3 alarm_timer truue or: {%d}", alarm_timer);
+    printf("DEBUG CODE - FGREEN: 3 of 3 alarm_timer true or: {%d}\n", alarm_timer);
+    // Always assume everything fails and check for success.
+    FILE *file_descriptor = NULL;
+    // Pointer to the working file, open it, create if necessary, and append.
+    //file_descriptor = fopen (FILE_TO_READ_TO, "w");
+    function_return_status = pthread_mutex_lock(&sharedMemMutexSemaphore);
+        if(function_return_status != 0)
+        {
+            syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: pthread_mutex_lock() FAILED ");
+            
+        }
+
+    file_descriptor = fopen (FILE_TO_WRITE_TO, "a+");
+    
+    write_timer(file_descriptor);
+    
+
+    fflush(file_descriptor);
+    fclose(file_descriptor);
+
+    function_return_status = pthread_mutex_unlock(&sharedMemMutexSemaphore);
+        if(function_return_status != 0)
+        {
+            syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: pthread_mutex_lock() FAILED ");
+            
+        }
+
+
+
+  }
+}
+
+
+
+void remove_temporary_file()
 {
     int check = 0;
 
@@ -292,162 +426,112 @@ int create_temporary_file(char * where)
     return status;
 }
 
-// DEBUG CODE BELOW - FGREEN WAS NOT HERE
-/* Required timer tracking */
-int write_timer(FILE *file_descriptor)
+/* Listen and accept loop function */
+int copy_stream_file(int num_bytes_written)
 {
-   syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: Entering write_timer()");
-   char buffer [256];
-   char local_string [256] = {};
-   int num_bytes_written = 0;
-   const char* time_format = "%a, %d %b %Y %T %z";
-   time_t local_time;
-   struct tm *timestamp;
-   
-   local_time =  time(NULL);
-   
-   timestamp = localtime(&local_time); 
-   
-   if (timestamp == NULL)
-   {
-       perror("DEBUG CODE - FGREEN: localtime() failed");
-       syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: write_timer() FAIL ");
-
-       return (-1);
-   }  
-
-   if(strftime(local_string, sizeof(local_string), time_format, timestamp) == 0)
-   { 
-       return (-1);
-   }
-
-   strncpy(buffer, "timestamp:", sizeof(buffer));
-   strncat(buffer, local_string, sizeof(buffer-1));
-   strncat(buffer, "\n", sizeof(buffer-1));
-
-   num_bytes_written = fwrite (buffer, 1, strlen(buffer), file_descriptor);
-   
-   if (num_bytes_written != 0)
-   {
-       syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: write_timer() - "
-              "fwrite() SUCCESS.  num_bytes_written = {%d}, buffer: {%s}"
-              , num_bytes_written , buffer);
-   }
-   else
-   {
-       syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: write_timer() - "
-              "fwrite() FAILED.  num_bytes_written = {%d}, buffer: {%s}"
-              , num_bytes_written, buffer);
-   }
-
-   syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: Exiting write_timer()");
-   return (0); 
-}
+    syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: setting up threaded timer ");
+    syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: setting up local "
+            "socket");
 
 
-/* Thread function */
-void* thread_function(void* thread_param)
-{
-//   int nr;
-//   int ret;
-//   int size_received = 0;
-//   int s_receive; 
-//   int s_send;
-//   int current_size = 0;
-//////// MOVED BELOW 
+    char myIpv4[INET_ADDRSTRLEN]; // space to hold IPV4 Address.
+    char myIpv6[INET6_ADDRSTRLEN]; // space to hold IPv6  Address.
+    struct sockaddr_in experiment;
+    char hostname[64];
+
     int function_return_status = 0;
 
-    unsigned long num_bytes_read = 0;
-    unsigned long num_bytes_written = 0;
+    char path_to_write [sizeof(FILE_TO_WRITE_TO)];
+//    unsigned long num_bytes_read = 0;
+
+    // Always assume everything fails and check for success.
+    FILE *read_file_descriptor = NULL;
+    FILE *write_file_descriptor = NULL;
+
 
     char debug_array[2048];
     memset(debug_array, 0, sizeof(debug_array));
 
-    // Always assume everything fails and check for success.
-    FILE *file_descriptor = NULL;
+//    int read_file_position_is = 0;
 
-    static char system_input_character;
-    int breaker = FILE_WRITE_TIMEOUT;
-
-    unsigned long write_count_counter = 0;
-    int read_file_position_is = 0;
+    memset(path_to_write, 0, sizeof(path_to_write));
+    memset(hostname, 0, sizeof(hostname));
+    memset(myIpv4, 0, sizeof(myIpv4));
+    memset(myIpv6, 0, sizeof(myIpv6));
 
 
-//////// MOVED ABOVE   
-   int port = 0;
-   struct data_thread* thread_info = (struct data_thread *)thread_param;
+    gethostname(hostname, sizeof(hostname));
+    inet_pton(AF_INET, SYSTEM_TCP_IP_ADDRESS, &(experiment.sin_addr));
+    inet_ntop(AF_INET, &(experiment.sin_addr), myIpv4, INET_ADDRSTRLEN);
+    syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN - myIpv4 %s", myIpv4);
 
-   // Deal with both IPv4 and IPv6
-   if (thread_info->client_address_storage.ss_family == AF_INET)
-   {
-       char clientIP[INET_ADDRSTRLEN]; // space to hold IPV4 Address.
+    sprintf(path_to_write, "%s", FILE_TO_WRITE_TO);
+    create_temporary_file(path_to_write);
 
-       struct sockaddr_in *s = (struct sockaddr_in *)
-           &thread_info->client_address_storage;
+    /////////////////////////////////////////////////////
+    //         Read file
+    ////////////////////////////////////////////////////
 
-       port = ntohs(s->sin_port);
+    // Pointer to the working file, open it, create if necessary, and append.
+    read_file_descriptor = fopen (FILE_TO_READ_TO, "r");
 
-       inet_ntop(AF_INET, &(s->sin_addr), clientIP,
-               INET_ADDRSTRLEN);
-       
+    if(read_file_descriptor == NULL)
+    {
+        printf("DEBUG CODE - FGREEN: Student's error message: Failed to open "
+                "file.\n");
+        syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: Student's error "
+                "message: ERROR: Failed to open or create file.");
+    }
+    else
+    {
 
-       syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: Server "
-               "Socket 'close()' closed connection from IPv4 address: %s, "
-               "port: %d", clientIP, port);
-       syslog(LOG_USER | LOG_INFO, "Closed connection from %s"
-               , clientIP);
+        write_file_descriptor = fopen (FILE_TO_WRITE_TO, "a+");
 
-   }
-   else
-   {
-       char clientIP[INET6_ADDRSTRLEN]; // space to hold IPv6  Address.
-       struct sockaddr_in6 *s = (struct sockaddr_in6 *)&thread_info->client_address_storage;
-       port = ntohs(s->sin6_port);
-
-       inet_ntop(AF_INET6, &(s->sin6_addr), clientIP,
-               INET6_ADDRSTRLEN);
-
-
-       syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: Server "
-               "Socket 'close()' closed connection from IPv6 address: %s, "
-               "port: %d", clientIP, port);
-       syslog(LOG_USER | LOG_INFO, "Closed connection from %s",
-               clientIP);
-
-   }
-
-// DEBUG CODE BELOW - FGREEN moved to thread_function() 
-//#if 0
-        /////////////////////////////////////////////////////
-        //         Write file
-        ////////////////////////////////////////////////////
-
-        function_return_status = pthread_mutex_lock(&sharedMemMutexSemaphore);
-        if(function_return_status != 0)
-        {
-            syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: pthread_mutex_lock() FAILED ");
-            
-        }
-
-
-        // Pointer to the working file, open it, create if necessary, and append.
-        file_descriptor = fopen (FILE_TO_WRITE_TO, "a+");
-
-        if(file_descriptor == NULL)
+        if(write_file_descriptor == NULL)
         {
             printf("DEBUG CODE - FGREEN: Student's error message: Failed to open "
                     "file.\n");
             syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: Student's error "
-                    "message: ERROR: Write failed to open or create file.");
+                    "message: ERROR: Failed to open or create file.");
         }
-        else
+
+        char cchar;
+
+        num_bytes_written = 0; 
+        cchar = fgetc(read_file_descriptor);
+        while (cchar != EOF)
         {
-            syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: Evaluating alarm_timer for writing time to log.  alarm_timer: {%d}", alarm_timer);
-            if(alarm_timer)
-            {
-               write_timer(file_descriptor);
-               alarm_timer = false;
-            }
+            fputc(cchar, write_file_descriptor);
+            cchar = fgetc(read_file_descriptor);
+            num_bytes_written += 1;
+
+        }
+
+//#i      // READ BUFFER OVER FLOW TEST
+ //       fseek(read_file_descriptor, 0L, SEEK_END);
+ //       read_file_position_is = ftell(read_file_descriptor);
+ //       fseek(read_file_descriptor, 0L, SEEK_SET);
+        // Total file size minus the number just written
+        // will be the section needed to pas the test.
+
+
+//        char *what_to_read;
+
+//        what_to_read = (char*)malloc(read_file_position_is + 1);
+//        if (what_to_read == NULL)
+//        {
+//            printf("Error reallocating space for 'what_to_read'");
+//        }
+//
+//        memset(what_to_read, 0, sizeof(num_bytes_written + 1));
+
+//        num_bytes_read = fread(what_to_read, read_file_position_is, 1, read_file_descriptor);
+
+//        fwrite(what_to_read, read_file_position_is, 1, read_file_descriptor);
+
+#if 0
+//////////////////////////////////////
+
 
             write_count_counter = 0;
 
@@ -483,99 +567,191 @@ void* thread_function(void* thread_param)
                 breaker--;
 
             } /* end while */
-#if 0
-            syslog(LOG_USER | LOG_DEBUG, "DEBUG CODE - FGREEN: Writing (%s) "
-                    "to (%s); num_bytes_written = %lu", what, where,
-                    (unsigned long) *num_bytes_written);
+
+
+
+///////////////////////////////////////
 #endif
-        }
 
 
-        /////////////////////////////////////////////////////
-        //         Read file
-        ////////////////////////////////////////////////////
+//        printf("DEBUG CODE - FGREEN: reading file: %s\n",
+//                what_to_read);
+//
+//        printf("DEBUG CODE - FGREEN: reading file: %s\n",
+//                what_to_read);
+//        printf("DEUBG CODE - FGREEN: debug_array: %s\n",
+//                        debug_array);
 
 
-        if(file_descriptor == NULL)
-        {
-            printf("DEBUG CODE - FGREEN: Student's error message: Failed to open "
-                    "file.\n");
-            syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: Student's error "
-                    "message: ERROR: Failed to open or create file.");
-        }
-        else
-        {
-
-
-//#if 0       // READ BUFFER OVER FLOW TEST
-            fseek(file_descriptor, 0L, SEEK_END);
-            read_file_position_is = ftell(file_descriptor);
-            fseek(file_descriptor, 0L, SEEK_SET);
-            // Total file size minus the number just written
-            // will be the section needed to pas the test.
-
-
-            char *what_to_read;
-
-            what_to_read = (char*)malloc(read_file_position_is + 1);
-            if (what_to_read == NULL)
-            {
-                printf("Error reallocating space for 'what_to_read'");
-            }
-
-            memset(what_to_read, 0, sizeof(num_bytes_written + 1));
-
-            fread(what_to_read, num_bytes_written, 1, file_descriptor);
-
-            send(client_sock, what_to_read, read_file_position_is, 0);
-
-
-                    printf("DEBUG CODE - FGREEN: reading file: %s\n",
-                            what_to_read);
-
-                    printf("DEBUG CODE - FGREEN: reading file: %s\n",
-                            what_to_read);
-                    printf("DEUBG CODE - FGREEN: debug_array: %s\n",
-                            debug_array);
-
-
-            syslog(LOG_USER | LOG_DEBUG, "DEBUG CODE - FGREEN: Reading (%s) to (%s): returned %lu "
-                    "num_bytes_read", what_to_read, FILE_TO_WRITE_TO, num_bytes_read);
+//        syslog(LOG_USER | LOG_DEBUG, "DEBUG CODE - FGREEN: Reading (%s) to (%s): returned %lu "
+//                "num_bytes_read", what_to_read, FILE_TO_WRITE_TO, num_bytes_read);
 
 
 
-            // Free pointer
-            free(what_to_read);
+        // Free pointer
+//        free(what_to_read);
 
-            external_process_daemon_kill_function();
-        }
+        external_process_daemon_kill_function();
+    }
 
-        if(file_descriptor != NULL)
-        {
-            fflush(file_descriptor);
-            fclose(file_descriptor);
-            fflush(fp);
-            fclose(fp);
-        }
+    if(read_file_descriptor != NULL)
+    {
+        fflush(read_file_descriptor);
+        fclose(read_file_descriptor);
+    }
 
-        function_return_status = pthread_mutex_unlock(&sharedMemMutexSemaphore);
-        if(function_return_status != 0)
-        {
-            syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: pthread_mutex_unlock() FAILED ");
-            
-        }
+    if(write_file_descriptor != NULL)
+    {
+        fflush(write_file_descriptor);
+        fclose(write_file_descriptor);
+    }
 
-        thread_info->connection_completion_success = true;
-//#endif
-// DEBUG CODE ABOVE - FGREEN moved to thread_function() 
-   return 0;
+    if(function_return_status != 0)
+    {
+        syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: pthread_mutex_unlock() FAILED ");
+        
+    }
+
+    return num_bytes_written;
 }
-// DEBUG CODE ABOVE - FGREEN WAS NOT HERE
+
+
+/* Read File */
+void read_aesd_file(int num_bytes_written)
+{
+    syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: setting up threaded timer ");
+    syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: setting up local "
+            "socket");
+
+
+    char myIpv4[INET_ADDRSTRLEN]; // space to hold IPV4 Address.
+    char myIpv6[INET6_ADDRSTRLEN]; // space to hold IPv6  Address.
+    struct sockaddr_in experiment;
+    char hostname[64];
+
+    int function_return_status = 0;
+
+    char path_to_write [sizeof(FILE_TO_WRITE_TO)];
+    unsigned long num_bytes_read = 0;
+
+    // Always assume everything fails and check for success.
+    FILE *file_descriptor = NULL;
+
+
+    char debug_array[2048];
+    memset(debug_array, 0, sizeof(debug_array));
+
+    int read_file_position_is = 0;
+
+    memset(path_to_write, 0, sizeof(path_to_write));
+    memset(hostname, 0, sizeof(hostname));
+    memset(myIpv4, 0, sizeof(myIpv4));
+    memset(myIpv6, 0, sizeof(myIpv6));
+
+
+    gethostname(hostname, sizeof(hostname));
+    inet_pton(AF_INET, SYSTEM_TCP_IP_ADDRESS, &(experiment.sin_addr));
+    inet_ntop(AF_INET, &(experiment.sin_addr), myIpv4, INET_ADDRSTRLEN);
+    syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN - myIpv4 %s", myIpv4);
+
+    sprintf(path_to_write, "%s", FILE_TO_WRITE_TO);
+    create_temporary_file(path_to_write);
+
+    /////////////////////////////////////////////////////
+    //         Read file
+    ////////////////////////////////////////////////////
+
+    // Pointer to the working file, open it, create if necessary, and append.
+    file_descriptor = fopen (FILE_TO_WRITE_TO, "a+");
+
+    if(file_descriptor == NULL)
+    {
+        printf("DEBUG CODE - FGREEN: Student's error message: Failed to open "
+                "file.\n");
+        syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: Student's error "
+                "message: ERROR: Failed to open or create file.");
+    }
+    else
+    {
+
+
+        int file_position_was = 0;
+        file_position_was = ftell(file_descriptor);
+
+//#i      // READ BUFFER OVER FLOW TEST
+        fseek(file_descriptor, 0L, SEEK_END);
+        read_file_position_is = ftell(file_descriptor);
+        fseek(file_descriptor, 0L, SEEK_SET);
+        //fseek(file_descriptor, (read_file_position_is - num_bytes_written), SEEK_SET);
+        // Total file size minus the number just written
+        // will be the section needed to pass the test.
+
+            printf ("DEBUG CODE - FGREEN: READ\n");
+            printf ("DEBUG CODE - FGREEN: read_file_position_is {%d}\n", read_file_position_is);
+            printf ("DEBUG CODE - FGREEN: file_position_was {%d}\n", file_position_was);
+            printf ("DEBUG CODE - FGREEN: num_bytes_written {%d}\n", num_bytes_written);
+
+
+        char *what_to_read;
+
+        what_to_read = (char*)malloc(read_file_position_is + 1);
+        if (what_to_read == NULL)
+        {
+            printf("Error reallocating space for 'what_to_read'");
+        }
+
+        memset(what_to_read, 0, sizeof(num_bytes_written + 1));
+
+        //fread(what_to_read, num_bytes_written, 1, file_descriptor);
+        fread(what_to_read, read_file_position_is, 1, file_descriptor);
+
+        send(client_sock, what_to_read, read_file_position_is, 0);
+        //send(datap->thread->client_data, what_to_read, read_file_position_is, 0);
+
+
+        printf("DEBUG CODE - FGREEN: reading file: %s\n",
+                what_to_read);
+
+        printf("DEBUG CODE - FGREEN: reading file: %s\n",
+                what_to_read);
+        printf("DEUBG CODE - FGREEN: debug_array: %s\n",
+                        debug_array);
+
+
+        syslog(LOG_USER | LOG_DEBUG, "DEBUG CODE - FGREEN: Reading (%s) to (%s): returned %lu "
+                "num_bytes_read", what_to_read, FILE_TO_WRITE_TO, num_bytes_read);
+
+
+
+        // Free pointer
+        free(what_to_read);
+
+        external_process_daemon_kill_function();
+    }
+
+    if(file_descriptor != NULL)
+    {
+        fflush(file_descriptor);
+        fclose(file_descriptor);
+    }
+
+    if(function_return_status != 0)
+    {
+        syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: pthread_mutex_unlock() FAILED ");
+        
+    }
+}
+
 
 
 /* Listen and accept loop function */
-void serve_clients_FGREEN()
+void *serve_clients_FGREEN(void* threadp)
 {
+    syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: setting up threaded timer ");
+    syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: setting up local "
+            "socket");
+
+
     char myIpv4[INET_ADDRSTRLEN]; // space to hold IPV4 Address.
     char myIpv6[INET6_ADDRSTRLEN]; // space to hold IPv6  Address.
     struct sockaddr_in experiment;
@@ -589,21 +765,20 @@ void serve_clients_FGREEN()
 
     char path_to_write [sizeof(FILE_TO_WRITE_TO)];
 //    unsigned long num_bytes_read = 0;
-//    unsigned long num_bytes_written = 0;
-//
-//
-//    // Always assume everything fails and check for success.
-//    FILE *file_descriptor = NULL;
-//
+    unsigned long num_bytes_written = 0;
+
+    // Always assume everything fails and check for success.
+    FILE *file_descriptor = NULL;
+
 //    static char system_input_character;
     static socklen_t fromlen;
 
-//    char debug_array[2048];
-//    memset(debug_array, 0, sizeof(debug_array));
+    char debug_array[2048];
+    memset(debug_array, 0, sizeof(debug_array));
 
 //    int breaker = FILE_WRITE_TIMEOUT;
-//
-//    unsigned long write_count_counter = 0;
+
+    unsigned long write_count_counter = 0;
 //    int read_file_position_is = 0;
 
     memset(path_to_write, 0, sizeof(path_to_write));
@@ -620,32 +795,32 @@ void serve_clients_FGREEN()
     sprintf(path_to_write, "%s", FILE_TO_WRITE_TO);
     create_temporary_file(path_to_write);
 
-    int local_counter = 0; 
-
     for(;;)
     {
-
         /* Listen on the socket */
         if(listen(server_sock, 5) < 0)
         {
             perror("Server: listen");
-            syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: Server Socket "
+            syslog(LOG_INFO | LOG_ERR, "DEBUG CODE - FGREEN: Server Socket "
                     "'listen()' failed.");
             exit(-1);
         }
 
         /* Accept connections */
         if((client_sock=accept(server_sock,
-                        (struct sockaddr *)&client_sockaddr,
+                        (struct sockaddr *)&datap->thread->client_sockaddr,
                         &fromlen)) < 0)
         {
             perror("Server: accept");
-            syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: Server Socket "
+            syslog(LOG_INFO | LOG_ERR, "DEBUG CODE - FGREEN: Server Socket "
                     "'accept()' failed.");
             exit(-1);
         }
         else
-        {
+        { 
+
+            // HYBRID store client_sock into a better data structure until refactoring.
+            datap->thread->client_data = client_sock;
 
             getpeername(server_sock,
                     (struct sockaddr *)&client_address_storage,
@@ -663,10 +838,10 @@ void serve_clients_FGREEN()
                 inet_ntop(AF_INET, &(s->sin_addr), myIpv4,
                         INET_ADDRSTRLEN);
 
-                syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: Server "
+                syslog(LOG_INFO | LOG_INFO, "DEBUG CODE - FGREEN: Server "
                         "Socket 'accept()' accepted from IPv4 address: %s, "
                         "port: %d", myIpv4, port);
-                syslog(LOG_USER | LOG_INFO, "Accepted connection from %s"
+                syslog(LOG_INFO | LOG_INFO, "Accepted connection from %s"
                         , myIpv4);
             }
             else
@@ -677,72 +852,80 @@ void serve_clients_FGREEN()
                 inet_ntop(AF_INET6, &(s->sin6_addr), myIpv6,
                         INET6_ADDRSTRLEN);
 
-                syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: Server "
+                syslog(LOG_INFO | LOG_INFO, "DEBUG CODE - FGREEN: Server "
                         "Socket 'accept()' accepted from IPv6 address: %s, "
                         "port: %d", myIpv6, port);
-                syslog(LOG_USER | LOG_INFO, "Accepted connection from %s",
+                syslog(LOG_INFO | LOG_INFO, "Accepted connection from %s",
                         myIpv6);
             }
- 
-            // DEBUG CODE BELOW - FGREEN WAS NOT HERE
-
-            /////////////////////////////////////////////////////
-            //         Client Data
-            ////////////////////////////////////////////////////
-
-            local_counter++;
-
-            struct data_thread* client_data = malloc(sizeof(struct data_thread));
-            client_data->socketfd = client_sock;
-            client_data->client_address_storage = client_address_storage;
-            client_data->client = &client_sockaddr;
-            client_data->connection_completion_success = false;
-            client_data->counter = local_counter;
-
-
-            // DEBUG CODE ABOVE - FGREEN WAS NOT HERE
-           function_return_status = pthread_create(&(client_data->thread_id), NULL, thread_function, client_data);
-  
-           if (function_return_status == 0 )
-           {
-                syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: "
-                       "thread_funtion creation FAILED thread_id {%d}"
-                       , (int)client_data->counter);
-                
-                exit (-1);
-           }
-           else
-           {
-                syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: "
-                       "thread_funtion created successfully thread_id {%d}"
-                       , (int)client_data->counter);
-           }
-
-           SLIST_INSERT_HEAD(&head, client_data, entries);
-           if(client_data->connection_completion_success)
-           {
-                syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: "
-                       "Completed connection for thread_id {%d}"
-                       , (int)client_data->counter);
-               
-                close(client_data->socketfd);
-                pthread_join(client_data->thread_id, NULL);
-                SLIST_REMOVE(&head, client_data, data_thread, entries);
-           }
-
-           // DEBUG CODE ABOVE - FGREEN WAS NOT HERE
-
         }
 
-// DEBUG CODE BELOW - FGREEN moved to thread_function() 
-#if 0
+
         /////////////////////////////////////////////////////
         //         Write file
         ////////////////////////////////////////////////////
 
+        char* socket_input_char = malloc(PROGRAM_BUFFER_MAX*sizeof(char*));
+        bool buffer_empty = false;
+        int total_received_size = 0;
+        int received_size = 0;
+        int current_size = 0;
+
+        fp = fdopen(client_sock, "r");
+        if(fp == NULL)
+        {
+            printf("DEBUG CODE - FGREEN: Student's error message: Failed to open client_sock.\n");
+            syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: Student's error message: ERROR: Write failed to open client_sock.");
+        }
+        else
+        {
+            while(!buffer_empty)
+            {
+                socket_input_char = (char*) (realloc(socket_input_char, 
+                                    write_count_counter+PROGRAM_BUFFER_MAX));
+
+                //received_size = recv(datap->thread->client_data, (socket_input_char+received_size), 
+                received_size = recv(client_sock, (socket_input_char+received_size), 
+                                          PROGRAM_BUFFER_MAX, 0);
+                printf ("received_size {%d}\n", received_size);
+                  
+
+                if(received_size == -1)
+                {
+                    printf("DEBUG CODE - FGREEN: Student's error message: "
+                           "client_sock received_size error.\n");
+                    printf("DEBUG CODE - FGREEN: Student's error message: "
+                           "socket_input_char {%s}\n", socket_input_char);
+                    syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: "
+                           "Student's error message: ERROR: client_sock "
+                           "received_size error.");
+            //        exit(-1);
+                } 
+                
+                total_received_size = write_count_counter + received_size;
+
+                if((total_received_size > 0) 
+                    && (socket_input_char[total_received_size - 1] == '\n'))
+                {
+                    buffer_empty = true;
+                    socket_input_char[total_received_size - 1] = '\n';
+                } 
+ 
+                current_size += PROGRAM_BUFFER_MAX;
+            }
+        }
+
+#if 0 // Trying another socket method
+        function_return_status = pthread_mutex_lock(&sharedMemMutexSemaphore);
+        if(function_return_status != 0)
+        {
+            syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: pthread_mutex_lock() FAILED ");
+            
+        }
 
         // Pointer to the working file, open it, create if necessary, and append.
         file_descriptor = fopen (FILE_TO_WRITE_TO, "a+");
+        //file_descriptor = fopen (FILE_TO_READ_TO, "w");
 
         if(file_descriptor == NULL)
         {
@@ -757,115 +940,159 @@ void serve_clients_FGREEN()
             write_count_counter = 0;
 
             fp = fdopen(client_sock, "r");
-
-            // Place File Descriptor at the end of the file to append
-            fseek(file_descriptor, 0L, SEEK_END);
-
-            while((system_input_character = fgetc(fp)) != EOF)
+            if(fp == NULL)
             {
-                putchar(system_input_character);
+                printf("DEBUG CODE - FGREEN: Student's error message: Failed to open client_sock.\n");
+                syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: Student's error message: ERROR: Write failed to open client_sock.");
+            }
+            else
+            {
 
-                write_count_counter = (unsigned long) fwrite (&system_input_character, 1,
-                        strlen(&system_input_character), file_descriptor);
+                // Place File Descriptor at the end of the file to append
+                fseek(file_descriptor, 0L, SEEK_END);
 
-                num_bytes_written += write_count_counter;
-
-                if(system_input_character == '\n')
+                while((system_input_character = fgetc(fp)) != EOF)
                 {
-                    printf("BREAKING '/\n'\n");
+                    putchar(system_input_character);
 
-                    break;
-                }
+                    write_count_counter = (unsigned long) fwrite (&system_input_character, 1,
+                            strlen(&system_input_character), file_descriptor);
 
-                if(breaker < 1)
-                {
-                    //breaker = 10000;
-                    printf("BREAKING from breaker\n");
-                    breaker = FILE_WRITE_TIMEOUT;
-                    break;
-                }
+                    num_bytes_written += write_count_counter;
 
-                breaker--;
+                    if(system_input_character == '\n')
+                    {
+                        printf("BREAKING '/\n'\n");
 
-            } /* end while */
+                        break;
+                    }
+
+                    if(breaker < 1)
+                    {
+                        //breaker = 10000;
+                        printf("BREAKING from breaker\n");
+                        breaker = FILE_WRITE_TIMEOUT;
+                        break;
+                    }
+
+                    breaker--;
+
+                } /* end while */
 #if 0
-            syslog(LOG_USER | LOG_DEBUG, "DEBUG CODE - FGREEN: Writing (%s) "
-                    "to (%s); num_bytes_written = %lu", what, where,
-                    (unsigned long) *num_bytes_written);
+                syslog(LOG_USER | LOG_DEBUG, "DEBUG CODE - FGREEN: Writing (%s) "
+                        "to (%s); num_bytes_written = %lu", what, where,
+                        (unsigned long) *num_bytes_written);
 #endif
+            }
         }
-
-
-        /////////////////////////////////////////////////////
-        //         Read file
-        ////////////////////////////////////////////////////
-
-
-        if(file_descriptor == NULL)
+#endif // Trying another socket method
+  
+        if(buffer_empty)
         {
-            printf("DEBUG CODE - FGREEN: Student's error message: Failed to open "
-                    "file.\n");
-            syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: Student's error "
-                    "message: ERROR: Failed to open or create file.");
-        }
-        else
-        {
-
-
-//#if 0       // READ BUFFER OVER FLOW TEST
-            fseek(file_descriptor, 0L, SEEK_END);
-            read_file_position_is = ftell(file_descriptor);
-            fseek(file_descriptor, 0L, SEEK_SET);
-            // Total file size minus the number just written
-            // will be the section needed to pas the test.
-
-
-            char *what_to_read;
-
-            what_to_read = (char*)malloc(read_file_position_is + 1);
-            if (what_to_read == NULL)
+            function_return_status = pthread_mutex_lock(&sharedMemMutexSemaphore);
+            if(function_return_status != 0)
             {
-                printf("Error reallocating space for 'what_to_read'");
+                syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: pthread_mutex_lock() FAILED ");
+                
             }
 
-            memset(what_to_read, 0, sizeof(num_bytes_written + 1));
+            
+            file_descriptor = fopen (FILE_TO_WRITE_TO, "a+");
+            if(file_descriptor == NULL)
+            {
+                printf("DEBUG CODE - FGREEN: Student's error message: "
+                       "Failed to open file.\n");
+                syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: "
+                       "Student's error message: ERROR: Write failed to "
+                       "open or create file.");
+            }
 
-            fread(what_to_read, num_bytes_written, 1, file_descriptor);
-
-            send(client_sock, what_to_read, read_file_position_is, 0);
-
-
-                    printf("DEBUG CODE - FGREEN: reading file: %s\n",
-                            what_to_read);
-
-                    printf("DEBUG CODE - FGREEN: reading file: %s\n",
-                            what_to_read);
-                    printf("DEUBG CODE - FGREEN: debug_array: %s\n",
-                            debug_array);
-
-
-            syslog(LOG_USER | LOG_DEBUG, "DEBUG CODE - FGREEN: Reading (%s) to (%s): returned %lu "
-                    "num_bytes_read", what_to_read, FILE_TO_WRITE_TO, num_bytes_read);
+            if(alarm_timer)
+            {
+                write_timer(file_descriptor);
+                alarm_timer = false;
+            }
 
 
+          
+            printf ("DEBUG CODE - FGREEN: BEFORE \n");
+            printf ("DEBUG CODE - FGREEN: num_bytes_written {%lu}\n", num_bytes_written);
+            printf ("DEBUG CODE - FGREEN: socket_input_char{%s}\n", socket_input_char);
+            printf ("DEBUG CODE - FGREEN: total_received_size {%d}\n", total_received_size);
 
-            // Free pointer
-            free(what_to_read);
-
-            external_process_daemon_kill_function();
+            
+            //num_bytes_written = (unsigned long) fwrite (socket_input_char, 
+            //                      1, strlen(socket_input_char), 
+            //                      file_descriptor);
+            num_bytes_written = (unsigned long) fwrite (socket_input_char, 
+                                  1, total_received_size, 
+                                  file_descriptor);
+            
+            printf ("DEBUG CODE - FGREEN: AFTER \n");
+            printf ("DEBUG CODE - FGREEN: num_bytes_written {%lu}\n", num_bytes_written);
+            printf ("DEBUG CODE - FGREEN: socket_input_char{%s}\n", socket_input_char);
+            printf ("DEBUG CODE - FGREEN: total_received_size {%d}\n", total_received_size);
+            if (num_bytes_written == total_received_size)
+            {
+                printf("DEBUG CODE - FGREEN: Student's message: SUCCESS "
+                       "num_bytes_written {%lu} == total_received_size {%d}."
+                       "\n", num_bytes_written, total_received_size);
+                syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: SUCCESS "
+                       "num_bytes_written {%lu} == total_received_size {%d}."
+                       , num_bytes_written, total_received_size);
+            }
+            else
+            {
+                printf("DEBUG CODE - FGREEN: Student's ERROR message: ERROR "
+                       "num_bytes_written {%lu} != total_received_size {%d}."
+                       "\n", num_bytes_written, total_received_size);
+                syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: ERROR "
+                       "num_bytes_written {%lu} != total_received_size {%d}."
+                       , num_bytes_written, total_received_size);
+ 
+                exit (-1);
+            }
+         
         }
 
         if(file_descriptor != NULL)
         {
             fflush(file_descriptor);
             fclose(file_descriptor);
+        }
+
+        function_return_status = pthread_mutex_unlock(&sharedMemMutexSemaphore);
+        if(function_return_status != 0)
+        {
+            syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: pthread_mutex_lock() FAILED ");
+            
+        }
+
+        /////////////////////////////////////////////////////
+        //         Read file
+        ////////////////////////////////////////////////////
+
+        //num_bytes_written = copy_stream_file(num_bytes_written);
+
+        /////////////////////////////////////////////////////
+        //         Read file
+        ////////////////////////////////////////////////////
+
+
+        read_aesd_file(num_bytes_written);
+
+        if(file_descriptor != NULL)
+        {
             fflush(fp);
             fclose(fp);
         }
 
-#endif
-// DEBUG CODE ABOVE - FGREEN moved to thread_function() 
 
+        if(function_return_status != 0)
+        {
+            syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: pthread_mutex_unlock() FAILED ");
+            
+        }
 
         /////////////////////////////////////////////////////
         //         Clean Up Socket
@@ -886,10 +1113,10 @@ void serve_clients_FGREEN()
             inet_ntop(AF_INET, &(s->sin_addr), myIpv4,
                     INET_ADDRSTRLEN);
 
-            syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: Server "
+            syslog(LOG_INFO | LOG_INFO, "DEBUG CODE - FGREEN: Server "
                     "Socket 'close()' closed connection from IPv4 address: %s, "
                     "port: %d", myIpv4, port);
-            syslog(LOG_USER | LOG_INFO, "Closed connection from %s"
+            syslog(LOG_INFO | LOG_INFO, "Closed connection from %s"
                     , myIpv4);
 
         }
@@ -901,13 +1128,16 @@ void serve_clients_FGREEN()
             inet_ntop(AF_INET6, &(s->sin6_addr), myIpv6,
                     INET6_ADDRSTRLEN);
 
-            syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: Server "
+            syslog(LOG_INFO | LOG_INFO, "DEBUG CODE - FGREEN: Server "
                     "Socket 'close()' closed connection from IPv6 address: %s, "
                     "port: %d", myIpv6, port);
-            syslog(LOG_USER | LOG_INFO, "Closed connection from %s",
+            syslog(LOG_INFO | LOG_INFO, "Closed connection from %s",
                     myIpv6);
 
         }
+
+        datap->thread->finished = 1;
+        //pthread_join(client_data->thread_id, NULL);
 
     } /* end for ever */
 
@@ -951,18 +1181,39 @@ void terminate_program_handler()
     exit(0);
 }
 
-
-void alarm_program_handler()
+#if 0
+void alarm_program_handler(int signal_number)
 {
     syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: "
-            "alarm_program_handler(): terminating program");
+            "alarm_program_handler(): writing time to log");
+    printf("DEBUG CODE - FGREEN: alarm_program_handler(): writing time to log\n");
 
+    if(signal_number == SIGALRM)
+    {
+        syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: 2 of 3 alarm_timer truue or: {%d}", alarm_timer);
+        printf("DEBUG CODE - FGREEN: 2 of 3 alarm_timer true or: {%d}\n", alarm_timer);
+        // Always assume everything fails and check for success.
+        FILE *file_descriptor = NULL;
+        // Pointer to the working file, open it, create if necessary, and append.
+        file_descriptor = fopen (FILE_TO_WRITE_TO, "a+");
+    
+        write_timer(file_descriptor);
+        
+        alarm_timer = true;   
+
+        fflush(file_descriptor);
+        fclose(file_descriptor);
+    }
+
+#if 0
     remove_temporary_file();
     close(client_sock);
     close(server_sock);
 
     exit(0);
+#endif
 }
+#endif
 
 int main(int argc, char ** argv)
 {
@@ -972,6 +1223,16 @@ int main(int argc, char ** argv)
     {
         remove_temporary_file();
     }
+    //thread_info_t* thread_information;
+    pthread_t timer;
+ 
+    init_linked_lists();
+
+    // start timer thread
+//    pthread_create(&timer, (void*)0, (void*) set_timer, (void*)0);
+
+    // start timer thread
+    pthread_create(&timer, (void *)0, timer_thread, (void *)0);
 
     char hostname[64];
     struct hostent *hp;
@@ -980,13 +1241,7 @@ int main(int argc, char ** argv)
     unsigned int sock_option = 1;
     unsigned int sock_length = 0;
     char *sock_option_val;
-    int function_return_status = 0;
 
-    interrupted = false;
-
-    syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: setting up local "
-            "socket");
-    syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: %s", UNIVERSITY_OF_COLORADO_BOULDER_COURSERA);
 
     // DEBUG CODE BELOW - FGREEN
     char myIpv4[INET_ADDRSTRLEN]; // space to hold my designated IP Address.
@@ -1101,25 +1356,13 @@ int main(int argc, char ** argv)
 
     sockarg = 1;
 
-//    setsockopt(server_sock, SOL_SOCKET, SO_LINGER, (char*) &opt, sizeof(opt));
-//    setsockopt(client_sock, SOL_SOCKET, SO_REUSEADDR, (char *)&sockarg,
-//            sizeof(int));
-   
-    if(setsockopt(server_sock, SOL_SOCKET, SO_LINGER, (char*) &opt, sizeof(opt))== -1)
-    {
-        perror("setsockopt(server_sock)");
-        return -1;
-    }
-    if(setsockopt(client_sock, SOL_SOCKET, SO_REUSEADDR, (char *)&sockarg, sizeof(int)) == -1)
-    {
-        perror("setsockopt(server_sock)");
-        return -1;
-    }
-
+    setsockopt(server_sock, SOL_SOCKET, SO_LINGER, (char*) &opt, sizeof(opt));
+    setsockopt(client_sock, SOL_SOCKET, SO_REUSEADDR, (char *)&sockarg,
+            sizeof(int));
     signal(SIGINT, external_interrupt_handler);
     signal(SIGPIPE, broken_pipe_handler);
     signal(SIGTERM, terminate_program_handler);
-    signal(SIGALRM, alarm_program_handler);
+//    signal(SIGALRM, alarm_program_handler);
 
     port = ntohs(server_sockaddr.sin_port);
 
@@ -1129,35 +1372,45 @@ int main(int argc, char ** argv)
     syslog(LOG_INFO | LOG_INFO, "DEBUG CODE - FGREEN: Server Socket IPv4 is "
             "to address: %s, port: %d", myIpv4, port);
 
-// DEBUG CODE BELOW - FGREEN WAS NOT HERE
-    function_return_status = pthread_mutex_init(&sharedMemMutexSemaphore, NULL);
-    if(function_return_status !=0)
-    {
-        perror("pthread_mutex_init: sharedMemMutexSemaphore");
-        syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: pthread_mutex_init failed with code: %d.", function_return_status);
-    }
- 
-    SLIST_INIT(&head);
-    listen(client_sock, BACKLOG);
-    if(set_timer() != 0)
-    {
-       perror("set_timer failed"); 
-    }
 
-//    int local_counter = 0; 
-//    while(!interrupted)
-//    {
-//       new_sockfd=accept(socketfd);
-//    }
+    // Create client thread
+    datap = malloc(sizeof(slist_data_t));
+    datap->thread = malloc(sizeof(thread_info_t));
+    datap->thread->thread_id = malloc(sizeof(pthread_t));
     
+    datap->thread->finished = 0;
 
-// DEBUG CODE ABOVE - FGREEN WAS NOT HERE
+    SLIST_INSERT_HEAD(&head, datap, entries);
+    
+    pthread_create(datap->thread->thread_id, (void *)0, serve_clients_FGREEN,
+                           datap->thread);
+
+    SLIST_FOREACH(datap, &head, entries)
+    {
+        if(datap->thread->finished != 0) 
+        {
+          //free(datap);
+          pthread_join(*datap->thread->thread_id, NULL);
+          free(datap->thread->thread_id);
+          free(datap->thread);
+          SLIST_REMOVE(&head, datap, slist_data_s, entries);
+        }
+    }
 
 
-    serve_clients_FGREEN();
+    while (!SLIST_EMPTY(&head)) 
+    {
+        datap = SLIST_FIRST(&head);
+        shutdown(datap->thread->client_data, SHUT_RDWR);
+        close(datap->thread->client_data);
+        pthread_join(*datap->thread->thread_id, NULL);
+        free(datap->thread->thread_id);
+        free(datap->thread);
+        SLIST_REMOVE_HEAD(&head, entries);
+        free(datap);
+    }
 
-    syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: %s", UNIVERSITY_OF_COLORADO_BOULDER_COURSERA);
-    printf("DEBUG CODE - FGREEN: %s", UNIVERSITY_OF_COLORADO_BOULDER_COURSERA);
+    //serve_clients_FGREEN();
 
     return function_status;
 }
