@@ -827,13 +827,13 @@ int main(int argc, char ** argv)
     {
         remove_temporary_file();
     }
-    //thread_info_t* thread_information;
-    pthread_t timer;
- 
-    init_linked_lists();
-
-    // start timer thread
-    pthread_create(&timer, (void *)0, timer_thread, (void *)0);
+//    //thread_info_t* thread_information;
+//    pthread_t timer;
+// 
+//    init_linked_lists();
+//
+//    // start timer thread
+//    pthread_create(&timer, (void *)0, timer_thread, (void *)0);
 
     char hostname[64];
     struct hostent *hp;
@@ -974,6 +974,13 @@ int main(int argc, char ** argv)
 
 
     // Create client thread
+    //thread_info_t* thread_information;
+    pthread_t timer;
+    
+    init_linked_lists();
+    
+    // start timer thread
+    pthread_create(&timer, (void *)0, timer_thread, (void *)0);
     datap = malloc(sizeof(slist_data_t));
     datap->thread = malloc(sizeof(thread_info_t));
     datap->thread->thread_id = malloc(sizeof(pthread_t));
