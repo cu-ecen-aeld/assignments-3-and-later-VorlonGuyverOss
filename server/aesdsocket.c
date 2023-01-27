@@ -195,7 +195,6 @@ int write_timer(FILE *file_descriptor)
    char local_string [256] = {};
    int num_bytes_written = 0;
    const char* time_format = "%a, %d %b %Y %T %z";
-  ///strftime(timestr, sizeof(timestr), "%a, %d %b %Y %T %z", tmp);
    time_t local_time;
    struct tm *timestamp;
    
@@ -220,9 +219,7 @@ int write_timer(FILE *file_descriptor)
    strcat(buffer, local_string);
    strcat(buffer, "\n");
 
-   //pthread_mutex_lock(&sharedMemMutexSemaphore);
    num_bytes_written = fwrite (buffer, 1, strlen(buffer), file_descriptor);
-   //pthread_mutex_unlock(&sharedMemMutexSemaphore);
    
    if (num_bytes_written != 0)
    {
@@ -285,7 +282,6 @@ void* timer_thread()
     }
   }
 }
-
 
 
 void remove_temporary_file()
