@@ -2,13 +2,23 @@
 INCLUDE_DIRS =
 LIB_DIRS =
 
-CC = $(CROSS_COMPILE)gcc
+ifeq ($(CC),)
+	CC = $(CROSS_COMPILE)gcc
+endif
+#CC = gcc
+#CC = /usr/bin/gcc-11
 
 CDEFS=
-CFLAGS= -O0 $(INCLUDE_DIRS) $(CDEFS)
+
+ifeq ($(CFLAGS),)
+	CFLAGS= -O0 $(INCLUDE_DIRS) $(CDEFS)
+endif
+
 LIBS=
 
-LDFLAGS = -g -Wall -Werror -pthread
+ifeq ($(LDFLAGS),)
+	LDFLAGS = -g -Wall -Werror -pthread
+endif
 
 DAEMON_FLAGS =
 
@@ -42,4 +52,5 @@ depend:
 
 .c.o:
 	$(CC) $(LDFLAGS) $(CFLAGS) ${DAEMON_FLAGS} $(INCLUDES) -c $< -o $@
+#$(CC) $(CFLAGS) $^ -o $@ $(INCLUDES) $(LDFLAGS)
 
