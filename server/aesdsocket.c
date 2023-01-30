@@ -28,7 +28,7 @@
 //#define SYSTEM_TCP_IP_ADDRESS   "10.0.10.30"
 //#define SYSTEM_TCP_IP_ADDRESS   "localhost"
 #define SYSTEM_TCP_IP_ADDRESS   "127.0.0.1"  //<<<< USE THIS ON LINUX LAPTOP
-//#define SYSTEM_TCP_IP_ADDRESS   "10.0.2.15" <-- was originally
+//#define SYSTEM_TCP_IP_ADDRESS   "10.0.2.15" <-- was originally for embedded hosts used on class
 #define SYSTEM_SOCK_OPTION_VAL  "localhost" //<<<< USE THIS ON LINUX LAPTOP
 //#define SYSTEM_SOCK_OPTION_VAL  "eth0";
 #define FILE_WRITE_TIMEOUT      10000000
@@ -254,7 +254,7 @@ void* timer_thread()
     }
 
     syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: 3 of 3 alarm_timer truue or: {%d}", alarm_timer);
-    printf("DEBUG CODE - FGREEN: 3 of 3 alarm_timer true or: {%d}\n", alarm_timer);
+    //printf("DEBUG CODE - FGREEN: 3 of 3 alarm_timer true or: {%d}\n", alarm_timer);
     // Always assume everything fails and check for success.
     FILE *file_descriptor = NULL;
     // Pointer to the working file, open it, create if necessary, and append.
@@ -408,7 +408,7 @@ void read_aesd_file(int num_bytes_written)
     gethostname(hostname, sizeof(hostname));
     inet_pton(AF_INET, SYSTEM_TCP_IP_ADDRESS, &(experiment.sin_addr));
     inet_ntop(AF_INET, &(experiment.sin_addr), myIpv4, INET_ADDRSTRLEN);
-    syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN - myIpv4 %s", myIpv4);
+    syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN - myIpv4 %s\n", myIpv4);
 
     sprintf(path_to_write, "%s", FILE_TO_WRITE_TO);
     create_temporary_file(path_to_write);
@@ -488,8 +488,9 @@ void read_aesd_file(int num_bytes_written)
 void *serve_clients_FGREEN(void* threadp)
 {
     syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: setting up threaded timer ");
-    syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: setting up local "
-            "socket");
+    printf("DEBUG CODE - FGREEN: setting up threaded timer \n");
+    syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: setting up local socket");
+    printf("DEBUG CODE - FGREEN: setting up local socket\n");
 
 
     char myIpv4[INET_ADDRSTRLEN]; // space to hold IPV4 Address.
@@ -576,8 +577,9 @@ void *serve_clients_FGREEN(void* threadp)
                 syslog(LOG_INFO | LOG_INFO, "DEBUG CODE - FGREEN: Server "
                         "Socket 'accept()' accepted from IPv4 address: %s, "
                         "port: %d", myIpv4, port);
-                syslog(LOG_INFO | LOG_INFO, "Accepted connection from %s"
-                        , myIpv4);
+                printf("DEBUG CODE - FGREEN: Server "
+                        "Socket 'accept()' accepted from IPv4 address: %s, "
+                        "port: %d\n", myIpv4, port);
             }
             else
             {
@@ -590,8 +592,9 @@ void *serve_clients_FGREEN(void* threadp)
                 syslog(LOG_INFO | LOG_INFO, "DEBUG CODE - FGREEN: Server "
                         "Socket 'accept()' accepted from IPv6 address: %s, "
                         "port: %d", myIpv6, port);
-                syslog(LOG_INFO | LOG_INFO, "Accepted connection from %s",
-                        myIpv6);
+                printf("DEBUG CODE - FGREEN: Server "
+                        "Socket 'accept()' accepted from IPv6 address: %s, "
+                        "port: %d\n", myIpv6, port);
             }
         }
 
@@ -784,9 +787,10 @@ void *serve_clients_FGREEN(void* threadp)
 
 void external_interrupt_handler()
 {
-        printf("\nsockets are being closed\n");
         syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN, Server: sockets "
                 "are being closed.");
+        printf("DEBUG CODE - FGREEN, Server: sockets "
+                "are being closed.\n");
         close(datap->thread->client_data);
         close(server_sock);
 
@@ -799,6 +803,10 @@ void external_interrupt_handler()
 
 void broken_pipe_handler()
 {
+    syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: "
+            "broken_pipe_handler(): terminating program");
+    printf("DEBUG CODE - FGREEN: "
+            "broken_pipe_handler(): terminating program\n");
         close(datap->thread->client_data);
         close(server_sock);
         remove_temporary_file();
@@ -810,6 +818,8 @@ void terminate_program_handler()
 {
     syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: "
             "terminate_program_handler(): terminating program");
+    printf("DEBUG CODE - FGREEN: "
+            "terminate_program_handler(): terminating program\n");
 
     remove_temporary_file();
     close(datap->thread->client_data);
@@ -860,6 +870,7 @@ int main(int argc, char ** argv)
     inet_ntop(AF_INET, &(experiment.sin_addr), myIpv4, INET_ADDRSTRLEN);
 
     syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: myIpv4 %s", myIpv4);
+    printf("DEBUG CODE - FGREEN: myIpv4 %s", myIpv4);
 
     gethostname(hostname, sizeof(hostname));
 
@@ -878,13 +889,24 @@ int main(int argc, char ** argv)
 
         if((hp = (struct hostent*) gethostbyname("localhost")) == NULL)
         {
-            fprintf(stderr, "Error: %s host unknown.\n", hp->h_name);
+            syslog(LOG_INFO | LOG_ERR, "DEBUG CODE - FGREEN Error: %s host unknown.", hp->h_name);
+            printf("DEBUG CODE - FGREEN Error: %s host unknown.\n", hp->h_name);
+
             exit(-1);
         }
         {
-            printf("DEBUG CODE - FGREEN: successfully retrieved host name: "
+            syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: successfully retrieved host name: "
                     "%s", hp->h_name);
+            printf("DEBUG CODE - FGREEN: successfully retrieved host name: "
+                    "%s\n", hp->h_name);
         }
+    }
+    else
+    {
+        syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: successfully retrieved host name: "
+               "%s", hp->h_name);
+        printf("DEBUG CODE - FGREEN: successfully retrieved host name: "
+               "%s\n", hp->h_name);
     }
 
     if((server_sock=socket(AF_INET, SOCK_STREAM, 0)) < 0)
@@ -905,11 +927,15 @@ int main(int argc, char ** argv)
     {
         syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: getsockopt() failed."
                 " sock_option = %d, sock_length = %d", sock_option, sock_length);
+        printf("DEBUG CODE - FGREEN: getsockopt() failed."
+                " sock_option = %d, sock_length = %d\n", sock_option, sock_length);
     }
     else
     {
         syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: getsockopt() success"
                 ".  sock_option = %d, sock_length = %d", sock_option, sock_length);
+        printf("DEBUG CODE - FGREEN: getsockopt() success"
+                ".  sock_option = %d, sock_length = %d\n", sock_option, sock_length);
     }
 
 
@@ -919,12 +945,18 @@ int main(int argc, char ** argv)
         syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: setsockopt() failed."
                 " sock_option = %d, sock_option_val = %c", sock_option,
                 *sock_option_val);
+        printf("DEBUG CODE - FGREEN: setsockopt() failed."
+                " sock_option = %d, sock_option_val = %c\n", sock_option,
+                *sock_option_val);
         exit(-1);
     }
     else
     {
         syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: setsockopt() succes"
                 " sock_option = %d, sock_option_val = %s", sock_option,
+                sock_option_val);
+        printf("DEBUG CODE - FGREEN: setsockopt() succes"
+                " sock_option = %d, sock_option_val = %s\n", sock_option,
                 sock_option_val);
     }
 
@@ -935,6 +967,7 @@ int main(int argc, char ** argv)
     {
         perror("Server: bind");
         syslog(LOG_USER | LOG_ERR, "DEBUG CODE - FGREEN: bind() failed.");
+        printf("DEBUG CODE - FGREEN: bind() failed.\n");
         exit(-1);
     }
     else
@@ -944,6 +977,9 @@ int main(int argc, char ** argv)
             syslog(LOG_USER | LOG_INFO, "DEBUG CODE - FGREEN: User passed in "
                     " the create dameon argurment '-d'.  "
                     "Entering 'create_daemon ()");
+            printf("DEBUG CODE - FGREEN: User passed in "
+                    " the create dameon argurment '-d'.  "
+                    "Entering 'create_daemon ()\n");
 
             create_daemon();
         }
@@ -971,6 +1007,8 @@ int main(int argc, char ** argv)
 
     syslog(LOG_INFO | LOG_INFO, "DEBUG CODE - FGREEN: Server Socket IPv4 is "
             "to address: %s, port: %d", myIpv4, port);
+    printf("DEBUG CODE - FGREEN: Server Socket IPv4 is "
+            "to address: %s, port: %d\n", myIpv4, port);
 
 
     // Create client thread
