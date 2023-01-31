@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Tester script for Multithreaded server with periodic timestamp using Netcat
 # Note: This script has to be executed only once after running the server
 # Author : Steve Kennedy
