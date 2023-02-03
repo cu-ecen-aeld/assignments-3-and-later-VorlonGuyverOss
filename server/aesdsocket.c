@@ -539,7 +539,16 @@ void *serve_clients_FGREEN(void* threadp)
             perror("Server: listen");
             syslog(LOG_INFO | LOG_ERR, "DEBUG CODE - FGREEN: Server Socket "
                     "'listen()' failed.");
+            printf("DEBUG CODE - FGREEN: Server Socket "
+                    "'listen()' failed.");
             exit(-1);
+        }
+        else
+        {
+            syslog(LOG_INFO | LOG_INFO, "DEBUG CODE - FGREEN: Server Socket "
+                    "'listen()' SUCCESS.");
+            printf("DEBUG CODE - FGREEN: Server Socket "
+                    "'listen()' SUCCESS.");
         }
 
         /* Accept connections */
@@ -550,10 +559,16 @@ void *serve_clients_FGREEN(void* threadp)
             perror("Server: accept");
             syslog(LOG_INFO | LOG_ERR, "DEBUG CODE - FGREEN: Server Socket "
                     "'accept()' failed.");
+            printf("DEBUG CODE - FGREEN: Server Socket "
+                    "'accept()' failed.");
             exit(-1);
         }
         else
         { 
+            syslog(LOG_INFO | LOG_INFO, "DEBUG CODE - FGREEN: Server Socket "
+                    "'accept()' SUCCESS.");
+            printf("DEBUG CODE - FGREEN: Server Socket "
+                    "'accept()' SUCCESS.");
 
             // HYBRID store client_sock into a better data structure until refactoring.
             datap->thread->client_data = client_sock;
